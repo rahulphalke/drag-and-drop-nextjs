@@ -1,4 +1,5 @@
 import { useForms } from "@/hooks/use-forms";
+import { useUser, useLogout } from "@/hooks/useAuth";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -28,6 +29,8 @@ import { Input } from "@/components/ui/input";
 import { QRCodeDialog } from "@/components/QRCodeDialog";
 
 export default function Home() {
+  const { data: user } = useUser();
+  const logout = useLogout();
   const { data: forms, isLoading, error } = useForms();
   const [viewSubmissionsId, setViewSubmissionsId] = useState<number | null>(null);
   const [qrCodeFormId, setQrCodeFormId] = useState<number | null>(null);
@@ -54,12 +57,30 @@ export default function Home() {
             <h1 className="text-2xl sm:text-4xl font-display font-bold text-foreground mb-1 sm:mb-2">My Forms</h1>
             <p className="text-muted-foreground text-sm sm:text-lg">Manage and build your data collection forms.</p>
           </div>
-          <Link href="/builder" className="self-start sm:self-auto">
-            <Button size="lg" className="shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5 transition-all">
-              <Plus className="w-5 h-5 mr-2" />
-              Create New Form
+          <div className="flex items-center gap-3 self-start sm:self-auto">
+            {user && (
+              <div className="hidden sm:flex items-center gap-2 mr-2 px-3 py-1.5 bg-white border border-border rounded-full shadow-sm">
+                <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm font-medium text-muted-foreground">{user.name}</span>
+              </div>
+            )}
+            <Link href="/builder">
+              <Button className="shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5 transition-all">
+                <Plus className="w-4 h-4 mr-2" />
+                Create Form
+              </Button>
+            </Link>
+            <Button
+              variant="outline"
+              onClick={() => logout.mutate()}
+              disabled={logout.isPending}
+              className="text-muted-foreground hover:text-destructive hover:border-destructive/30 hover:bg-destructive/5"
+            >
+              {logout.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Logout"}
             </Button>
-          </Link>
+          </div>
         </div>
 
         {/* Content */}

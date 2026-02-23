@@ -137,7 +137,7 @@ export async function setupAuth(app: Express) {
             saveUninitialized: false,
             cookie: {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
+                secure: app.get("env") === "production" && !!process.env.VERCEL, // Set to true only on Vercel to avoid dropping on localhost http
                 maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
             },
         })

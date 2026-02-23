@@ -41,6 +41,7 @@ export interface FormField {
 
 export const forms = pgTable("forms", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(), // Add reference to user table
   title: text("title").notNull(),
   slug: text("slug").notNull(),
   fields: jsonb("fields").notNull().$type<FormField[]>(),
@@ -60,7 +61,7 @@ const formFieldSchema = z.object({
 });
 
 export const insertFormSchema = createInsertSchema(forms)
-  .omit({ id: true, createdAt: true })
+  .omit({ id: true, createdAt: true, userId: true })
   .extend({
     fields: z.array(formFieldSchema),
     slug: z.string().optional(),

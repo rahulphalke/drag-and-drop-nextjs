@@ -11,9 +11,9 @@ function slugify(text: string): string {
 }
 
 export interface IStorage {
-  getForms(): Promise<Form[]>;
+  getForms(userId?: number): Promise<Form[]>;
   getForm(id: number): Promise<Form | undefined>;
-  createForm(form: InsertForm): Promise<Form>;
+  createForm(form: InsertForm, userId: number): Promise<Form>;
   updateForm(id: number, updates: Partial<InsertForm>): Promise<Form>;
   // Submissions
   createSubmission(formId: number, data: any): Promise<Submission>;
@@ -27,7 +27,10 @@ export class MemoryStorage implements IStorage {
   private nextId = 1;
   private submissionId = 1;
 
-  async getForms(): Promise<Form[]> {
+  async getForms(userId?: number): Promise<Form[]> {
+    if (userId !== undefined) {
+      return this.forms.filter(f => f.userId === userId);
+    }
     return this.forms;
   }
 
@@ -35,7 +38,7 @@ export class MemoryStorage implements IStorage {
     return this.forms.find((f) => f.id === id);
   }
 
-  async createForm(insertForm: InsertForm): Promise<Form> {
+  async createForm(insertForm: InsertForm, userId: number): Promise<Form> {
     const form: Form = {
       createdAt: new Date(),
       whatsappNumber: insertForm.whatsappNumber ?? null,
@@ -43,6 +46,7 @@ export class MemoryStorage implements IStorage {
       submitButtonText: (insertForm as any).submitButtonText ?? null,
       ...insertForm,
       id: this.nextId++,
+      userId,
       slug: (insertForm as any).slug || slugify(insertForm.title),
     };
     this.forms.push(form);
@@ -93,8 +97,12 @@ export class DatabaseStorage implements IStorage {
     this.eq = eq;
   }
 
-  async getForms(): Promise<Form[]> {
-    return await this.db.select().from(this.formsTable);
+  async getForms(userId?: number): Promise<Form[]> {
+    let query = this.db.select().from(this.formsTable);
+    if (userId !== undefined) {
+      query = query.where(this.eq(this.formsTable.userId, userId));
+    }
+    return await query;
   }
 
   async getForm(id: number): Promise<Form | undefined> {
@@ -105,11 +113,12 @@ export class DatabaseStorage implements IStorage {
     return form;
   }
 
-  async createForm(insertForm: InsertForm): Promise<Form> {
+  async createForm(insertForm: InsertForm, userId: number): Promise<Form> {
     const [form] = await this.db
       .insert(this.formsTable)
       .values({
         ...insertForm,
+        userId,
         slug: (insertForm as any).slug || slugify(insertForm.title),
       })
       .returning();

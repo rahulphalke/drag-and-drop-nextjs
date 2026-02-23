@@ -100,8 +100,8 @@ export async function registerRoutes(
   // ── Form routes ──────────────────────────────────────────────────────────────
 
   // GET /api/forms
-  app.get(api.forms.list.path, async (req, res) => {
-    const forms = await storage.getForms();
+  app.get(api.forms.list.path, requireAuth, async (req, res) => {
+    const forms = await storage.getForms(req.user!.id);
     res.json(forms);
   });
 
@@ -111,14 +111,21 @@ export async function registerRoutes(
     if (!form) {
       return res.status(404).json({ message: 'Form not found' });
     }
+
+    // Hide integration secrets from non-owners
+    if (!req.user || (req.user as any).id !== form.userId) {
+      const safeForm = { ...form, whatsappNumber: null, googleSheetUrl: null };
+      return res.json(safeForm);
+    }
+
     res.json(form);
   });
 
   // POST /api/forms
-  app.post(api.forms.create.path, async (req, res) => {
+  app.post(api.forms.create.path, requireAuth, async (req, res) => {
     try {
       const input = api.forms.create.input.parse(req.body);
-      const form = await storage.createForm(input);
+      const form = await storage.createForm(input, req.user!.id);
       res.status(201).json(form);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -149,16 +156,22 @@ export async function registerRoutes(
   });
 
   // POST /api/forms/save
-  app.post('/api/forms/save', async (req, res) => {
+  app.post('/api/forms/save', requireAuth, async (req, res) => {
     try {
       const body = req.body;
       if (body.id) {
+        // Protect updates: ensure user owns the form
+        const existingForm = await storage.getForm(Number(body.id));
+        if (!existingForm || existingForm.userId !== req.user!.id) {
+          return res.status(403).json({ message: "You don't have permission to edit this form" });
+        }
+
         const input = api.forms.update.input.parse(body);
         const form = await storage.updateForm(Number(body.id), input);
         res.json(form);
       } else {
         const input = api.forms.create.input.parse(body);
-        const form = await storage.createForm(input);
+        const form = await storage.createForm(input, req.user!.id);
         res.status(201).json(form);
       }
     } catch (err) {
@@ -217,9 +230,18 @@ export async function registerRoutes(
   });
 
   // GET /api/forms/:formId/submissions
-  app.get(api.submissions.list.path, async (req, res) => {
+  app.get(api.submissions.list.path, requireAuth, async (req, res) => {
     try {
       const formId = Number(req.params.formId);
+      const form = await storage.getForm(formId);
+
+      if (!form) {
+        return res.status(404).json({ message: "Form not found" });
+      }
+      if (form.userId !== (req.user as any).id) {
+        return res.status(403).json({ message: "You don't have permission to view these submissions" });
+      }
+
       const submissions = await storage.getSubmissions(formId);
       res.json(submissions);
     } catch (err) {
@@ -237,14 +259,28 @@ export async function seedDatabase() {
   const storage = await getStorage();
   const forms = await storage.getForms();
   if (forms.length === 0) {
-    await storage.createForm({
-      title: "Contact Us",
-      fields: [
-        { id: "name-field", type: "text", label: "Full Name", placeholder: "John Doe", required: true },
-        { id: "email-field", type: "text", label: "Email Address", placeholder: "john@example.com", required: true },
-        { id: "message-field", type: "text", label: "Message", placeholder: "How can we help you?", required: true },
-      ],
-    });
-    console.log("Seeded database with example form");
+    const hashed = await bcrypt.hash("password123", 12);
+    let user;
+    try {
+      [user] = await db
+        .insert(users)
+        .values({ email: "demo@example.com", password: hashed, name: "Demo User" })
+        .returning();
+    } catch {
+      const [existing] = await db.select().from(users).where(eq(users.email, "demo@example.com"));
+      user = existing;
+    }
+
+    if (user) {
+      await storage.createForm({
+        title: "Contact Us",
+        fields: [
+          { id: "name-field", type: "text", label: "Full Name", placeholder: "John Doe", required: true },
+          { id: "email-field", type: "text", label: "Email Address", placeholder: "john@example.com", required: true },
+          { id: "message-field", type: "text", label: "Message", placeholder: "How can we help you?", required: true },
+        ],
+      }, user.id);
+      console.log("Seeded database with example form linked to Demo User");
+    }
   }
 }

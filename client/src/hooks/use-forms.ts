@@ -6,7 +6,7 @@ export function useForms() {
   return useQuery({
     queryKey: [api.forms.list.path],
     queryFn: async () => {
-      const res = await fetch(api.forms.list.path);
+      const res = await fetch(api.forms.list.path, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch forms");
       return api.forms.list.responses[200].parse(await res.json());
     },
@@ -18,7 +18,7 @@ export function useForm(id: number) {
     queryKey: [api.forms.get.path, id],
     queryFn: async () => {
       const url = buildUrl(api.forms.get.path, { id });
-      const res = await fetch(url);
+      const res = await fetch(url, { credentials: "include" });
       if (res.status === 404) return null;
       if (!res.ok) throw new Error("Failed to fetch form");
       return api.forms.get.responses[200].parse(await res.json());
@@ -38,6 +38,7 @@ export function useCreateForm() {
       const res = await fetch(api.forms.create.path, {
         method: api.forms.create.method,
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(validated),
       });
 
@@ -79,6 +80,7 @@ export function useUpdateForm() {
       const res = await fetch(url, {
         method: api.forms.update.method,
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(validated),
       });
 
