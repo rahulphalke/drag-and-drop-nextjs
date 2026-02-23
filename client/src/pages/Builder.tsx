@@ -390,8 +390,8 @@ export default function Builder() {
             {/* Form Link */}
             <div className="space-y-2">
               <Label>Form Link</Label>
-              <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
-                <span className="text-xs text-muted-foreground whitespace-nowrap">{window.location.host}/share/{editId || '...'}/</span>
+              <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 w-full overflow-hidden">
+                <span className="text-xs text-muted-foreground truncate shrink min-w-[50px]">{window.location.host}/share/{editId || '...'}/</span>
                 <input
                   className="flex-1 bg-transparent text-sm outline-none min-w-0"
                   placeholder={slugify(formTitle) || "form-link"}
