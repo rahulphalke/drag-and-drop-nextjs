@@ -75,7 +75,7 @@ export function useUpdateForm() {
     mutationFn: async ({ id, ...updates }: { id: number } & any) => {
       const validated = api.forms.update.input.parse(updates);
       const url = buildUrl(api.forms.update.path, { id });
-      
+
       const res = await fetch(url, {
         method: api.forms.update.method,
         headers: { "Content-Type": "application/json" },
@@ -88,8 +88,9 @@ export function useUpdateForm() {
       }
       return api.forms.update.responses[200].parse(await res.json());
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [api.forms.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.forms.get.path, variables.id] });
       toast({
         title: "Saved",
         description: "Form updated successfully",
@@ -102,5 +103,18 @@ export function useUpdateForm() {
         variant: "destructive",
       });
     },
+  });
+}
+
+export function useSubmissions(formId: number) {
+  return useQuery({
+    queryKey: [api.submissions.list.path, formId],
+    queryFn: async () => {
+      const url = buildUrl(api.submissions.list.path, { formId });
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch submissions");
+      return res.json();
+    },
+    enabled: !isNaN(formId),
   });
 }

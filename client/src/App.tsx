@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -6,12 +6,47 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import Builder from "@/pages/Builder";
+import Preview from "@/pages/Preview";
+import ShareForm from "@/pages/ShareForm";
+import Login from "@/pages/Login";
+import { useUser } from "@/hooks/useAuth";
+
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { data: user, isLoading } = useUser();
+
+  if (isLoading) {
+    return (
+      <div className="login-loading">
+        <div className="login-spinner" />
+      </div>
+    );
+  }
+
+  if (!user) return <Redirect to="/login" />;
+  return <>{children}</>;
+}
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/builder" component={Builder} />
+      <Route path="/login" component={Login} />
+      <Route path="/">
+        <AuthGuard>
+          <Home />
+        </AuthGuard>
+      </Route>
+      <Route path="/builder">
+        <AuthGuard>
+          <Builder />
+        </AuthGuard>
+      </Route>
+      <Route path="/builder/:id">
+        <AuthGuard>
+          <Builder />
+        </AuthGuard>
+      </Route>
+      <Route path="/preview/:id" component={Preview} />
+      <Route path="/share/:id/:slug?" component={ShareForm} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -1,0 +1,6 @@
+
+> rest-express@1.0.0 start
+> node --env-file=.env dist/index.cjs
+
+4:53:34 PM [express] serving on port 5000
+4:53:41 PM [express] GET /api/forms/2 200 in 344ms :: {"id":2,"title":"Contact Us","slug":"contact-us","fields":[{"id":"name-field","type":"text","label":"Full Name","required":true,"placeholder":"John Doe"},{"id":"email-field","type":"text","label":"Email Address","required":true,"placeholder":"john@example.com"},{"id":"message-field","type":"text","label":"Message","required":true,"placeholder":"How can we help you?"}],"whatsappNumber":"917477230712","googleSheetUrl":null,"createdAt":"2026-02-22T10:37:50.263Z"}

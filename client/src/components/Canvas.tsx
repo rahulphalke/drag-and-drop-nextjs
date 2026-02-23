@@ -3,11 +3,16 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { useFormBuilderStore } from "@/lib/store";
 import { SortableField } from "./SortableField";
 import { cn } from "@/lib/utils";
-import { Ghost } from "lucide-react";
+import { Ghost, Send } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-export function Canvas() {
-  const { fields, selectedFieldId, selectField, removeField } = useFormBuilderStore();
-  
+interface CanvasProps {
+  isActive?: boolean;
+}
+
+export function Canvas({ isActive = true }: CanvasProps) {
+  const { fields, selectedFieldId, selectField, removeField, submitButtonText } = useFormBuilderStore();
+
   const { setNodeRef, isOver } = useDroppable({
     id: "canvas-droppable",
     data: {
@@ -16,11 +21,14 @@ export function Canvas() {
   });
 
   return (
-    <div className="flex-1 bg-muted/10 p-8 h-full overflow-y-auto flex justify-center">
+    <div className={cn(
+      "flex-1 bg-muted/10 p-2 sm:p-8 h-full overflow-y-auto flex justify-center items-start",
+      !isActive && "hidden md:flex"
+    )}>
       <div
         ref={setNodeRef}
         className={cn(
-          "w-full max-w-[600px] min-h-[800px] bg-white rounded-xl shadow-sm border border-border/50 p-8 transition-colors duration-200",
+          "w-full max-w-[600px] bg-white rounded-xl shadow-sm border border-border/50 p-4 sm:p-8 pb-12 transition-colors duration-200",
           isOver && "bg-primary/5 ring-2 ring-primary ring-inset border-primary/50"
         )}
       >
@@ -33,17 +41,30 @@ export function Canvas() {
             </div>
           </div>
         ) : (
-          <SortableContext items={fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
-            {fields.map((field) => (
-              <SortableField
-                key={field.id}
-                field={field}
-                isSelected={field.id === selectedFieldId}
-                onSelect={selectField}
-                onRemove={removeField}
-              />
-            ))}
-          </SortableContext>
+          <div className="space-y-6">
+            <SortableContext items={fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+              {fields.map((field) => (
+                <SortableField
+                  key={field.id}
+                  field={field}
+                  isSelected={field.id === selectedFieldId}
+                  onSelect={selectField}
+                  onRemove={removeField}
+                />
+              ))}
+            </SortableContext>
+
+            {/* Preview of the Submit Button */}
+            <div className="pt-6 border-t border-border/50 mt-8">
+              <Button
+                type="button"
+                className="w-full h-12 text-lg font-bold shadow-sm pointer-events-none"
+              >
+                <Send className="w-5 h-5 mr-2" />
+                {submitButtonText || "Submit Form"}
+              </Button>
+            </div>
+          </div>
         )}
       </div>
     </div>

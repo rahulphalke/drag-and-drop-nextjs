@@ -44,6 +44,23 @@ export const api = {
       },
     },
   },
+  submissions: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/forms/:formId/submissions' as const,
+      responses: {
+        200: z.array(z.custom<any>()),
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/forms/:formId/submissions' as const,
+      responses: {
+        201: z.custom<any>(),
+        400: errorSchemas.validation,
+      },
+    },
+  },
 };
 
 export function buildUrl(path: string, params?: Record<string, string | number>): string {
