@@ -1,8 +1,7 @@
-const { app, initApp } = require('../dist/index.cjs');
-
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
+  const { app, initApp } = await import('../dist/index.cjs');
   if (initApp) {
     await initApp();
   }
   return app(req, res);
-};
+}
