@@ -133,6 +133,7 @@ export async function setupAuth(app: Express) {
                 tableName: "session",
             }),
             secret: process.env.SESSION_SECRET || "dev-secret-change-in-production",
+            proxy: true,
             resave: false,
             saveUninitialized: false,
             cookie: {
