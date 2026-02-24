@@ -9,6 +9,7 @@ import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { passport } from "./auth";
+import { google } from "googleapis";
 
 // ─── Auth middleware ──────────────────────────────────────────────────────────
 
@@ -88,7 +89,16 @@ export async function registerRoutes(
   });
 
   // GET /api/auth/google
-  app.get("/api/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+  app.get("/api/auth/google", passport.authenticate("google", {
+    scope: [
+      "profile",
+      "email",
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive.readonly"
+    ],
+    accessType: "offline", // Required to get a refresh token
+    prompt: "consent",     // Force consent screen to ensure refresh token is provided
+  }));
 
   // GET /api/auth/google/callback
   app.get(
@@ -130,7 +140,7 @@ export async function registerRoutes(
     // Strip sensitive integration secrets for public sharing, 
     // but keep whatsappNumber for client-side redirection
     console.log(`[GET public form] shareId: ${req.params.shareId}, whatsappNumber: ${form.whatsappNumber}`);
-    const safeForm = { ...form, googleSheetUrl: null };
+    const safeForm = { ...form, googleSheetId: null, googleSheetName: null };
     res.json(safeForm);
   });
 
@@ -213,30 +223,81 @@ export async function registerRoutes(
       const formId = form.id;
       const submission = await storage.createSubmission(formId, req.body);
 
-      console.log(`New submission for form ${formId} (${shareId}). Integration settings:`, {
-        whatsappNumber: form.whatsappNumber,
-        googleSheetUrl: form.googleSheetUrl
-      });
-
-      // Google Sheets Integration
-      if (form.googleSheetUrl) {
+      // Handle Google Sheets integration if configured
+      if (form.googleSheetId) {
         try {
-          // Use global fetch (Node 18+)
-          fetch(form.googleSheetUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              formTitle: form.title,
-              submissionId: submission.id,
-              submittedAt: submission.createdAt,
-              data: req.body
-            }),
-          }).catch(err => console.error("Google Sheets async error:", err));
+          const formOwner = await db.select().from(users).where(eq(users.id, form.userId)).then(res => res[0]);
+
+          if (formOwner && formOwner.googleAccessToken) {
+            const oauth2Client = new google.auth.OAuth2(
+              process.env.GOOGLE_CLIENT_ID,
+              process.env.GOOGLE_CLIENT_SECRET
+            );
+
+            oauth2Client.setCredentials({
+              access_token: formOwner.googleAccessToken,
+              refresh_token: formOwner.googleRefreshToken,
+            });
+
+            // Handle token refresh events by saving new tokens to the DB
+            oauth2Client.on('tokens', async (tokens) => {
+              if (tokens.access_token) {
+                const updates: any = { googleAccessToken: tokens.access_token };
+                if (tokens.refresh_token) {
+                  updates.googleRefreshToken = tokens.refresh_token;
+                }
+                await db.update(users).set(updates).where(eq(users.id, formOwner!.id));
+                console.log(`[Google Sheets] Updated tokens for user ${formOwner!.id}`);
+              }
+            });
+
+            const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+
+            // 3. Prepare human-readable data (Removed Submission ID, Submitted At moved to end)
+            const headers = [...form.fields.map(f => f.label || f.id), 'Submitted At'];
+
+            const rowData = [
+              ...form.fields.map(f => {
+                const val = (req.body as any)[f.id];
+                return Array.isArray(val) ? val.join(', ') : (val?.toString() || '');
+              }),
+              new Date(submission.createdAt!).toLocaleString()
+            ];
+
+            console.log(`[Google Sheets] Appending to sheet ${form.googleSheetId}`);
+
+            // 4. Check if sheet is empty to see if we need to write headers
+            try {
+              const getRes = await sheets.spreadsheets.values.get({
+                spreadsheetId: form.googleSheetId as string,
+                range: 'A1:Z1', // Just check the first row
+              });
+
+              const hasHeaders = getRes.data.values && getRes.data.values.length > 0;
+              const valuesToAppend = hasHeaders ? [rowData] : [headers, rowData];
+
+              // 5. Append the data. We use a wide range "A:Z" to just append to the bottom of whatever data exists.
+              await sheets.spreadsheets.values.append({
+                spreadsheetId: form.googleSheetId as string,
+                range: 'A:Z',
+                valueInputOption: 'USER_ENTERED',
+                insertDataOption: 'INSERT_ROWS',
+                requestBody: {
+                  values: valuesToAppend,
+                },
+              });
+
+              console.log(`[Google Sheets] Success for submission ${submission.id}`);
+            } catch (err: any) {
+              console.error(`[Google Sheets] Error appending to sheet:`, err.message);
+            }
+          } else {
+            console.error(`[Google Sheets] Form owner ${form.userId} has no Google access token.`);
+          }
         } catch (err) {
-          console.error("Failed to initiate Google Sheets POST:", err);
+          console.error("[Google Sheets] Complete error processing submission:", err);
         }
       }
-
       res.status(201).json(submission);
     } catch (err) {
       console.error(err);
@@ -262,6 +323,47 @@ export async function registerRoutes(
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  // GET /api/integrations/google/sheets
+  // Fetches a list of the user's spreadsheets to show in the UI dropdown
+  app.get('/api/integrations/google/sheets', requireAuth, async (req, res) => {
+    try {
+      const user = await db.select().from(users).where(eq(users.id, req.user!.id)).then(res => res[0]);
+
+      if (!user || !user.googleAccessToken) {
+        return res.status(403).json({ message: "Google account not connected or missing permissions." });
+      }
+
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET
+      );
+
+      oauth2Client.setCredentials({
+        access_token: user.googleAccessToken,
+        refresh_token: user.googleRefreshToken,
+      });
+
+      const drive = google.drive({ version: 'v3', auth: oauth2Client });
+
+      // Query Google Drive for files of type spreadsheet
+      const response = await drive.files.list({
+        q: "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
+        fields: 'files(id, name)',
+        orderBy: 'modifiedTime desc',
+        pageSize: 50, // Let's limit to recent 50 for performance
+      });
+
+      res.json(response.data.files || []);
+    } catch (err: any) {
+      console.error("[Google Sheets] Complete error fetching sheets:", err);
+      // If token is expired and refresh failed, we might need them to re-auth
+      if (err.message?.includes('invalid_grant')) {
+        return res.status(401).json({ message: "Google connect expired. Please reconnect.", expires: true });
+      }
+      res.status(500).json({ message: "Failed to fetch Google Sheets" });
     }
   });
 

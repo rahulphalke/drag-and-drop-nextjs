@@ -48,7 +48,8 @@ export class MemoryStorage implements IStorage {
     const form: Form = {
       createdAt: new Date(),
       whatsappNumber: insertForm.whatsappNumber ?? null,
-      googleSheetUrl: insertForm.googleSheetUrl ?? null,
+      googleSheetId: insertForm.googleSheetId ?? null,
+      googleSheetName: insertForm.googleSheetName ?? null,
       submitButtonText: (insertForm as any).submitButtonText ?? null,
       ...insertForm,
       id: this.nextId++,

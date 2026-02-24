@@ -48,16 +48,40 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
                 clientID: process.env.GOOGLE_CLIENT_ID,
                 clientSecret: process.env.GOOGLE_CLIENT_SECRET,
                 callbackURL: "/api/auth/google/callback",
+                passReqToCallback: true,
+                proxy: true, // Crucial for Vercel: tells passport to trust the X-Forwarded-* headers to build the correct absolute callback URL
             },
-            async (_accessToken, _refreshToken, profile, done) => {
+            async (req: any, accessToken: string, refreshToken: string, profile: any, done: any) => {
                 try {
                     const email = profile.emails?.[0]?.value;
                     if (!email) return done(new Error("No email returned from Google"));
 
+                    // If user is already logged in, link the Google tokens to their CURRENT account
+                    if (req.user) {
+                        const [updated] = await db.update(users)
+                            .set({
+                                googleAccessToken: accessToken,
+                                ...(refreshToken ? { googleRefreshToken: refreshToken } : {})
+                            })
+                            .where(eq(users.id, req.user.id))
+                            .returning();
+                        console.log(`[Auth] Linked Google account ${email} to user ${req.user.id}`);
+                        return done(null, { id: updated.id, email: updated.email, name: updated.name, avatar: updated.avatar });
+                    }
+
+                    // Otherwise, proceed with normal login/signup flow
                     // Check if user already exists by googleId
                     const [existing] = await db.select().from(users).where(eq(users.googleId, profile.id));
                     if (existing) {
-                        return done(null, { id: existing.id, email: existing.email, name: existing.name, avatar: existing.avatar });
+                        // Update tokens on each login just in case
+                        const [updated] = await db.update(users)
+                            .set({
+                                googleAccessToken: accessToken,
+                                ...(refreshToken ? { googleRefreshToken: refreshToken } : {})
+                            })
+                            .where(eq(users.id, existing.id))
+                            .returning();
+                        return done(null, { id: updated.id, email: updated.email, name: updated.name, avatar: updated.avatar });
                     }
 
                     // Check if email already exists (link accounts)
@@ -65,7 +89,12 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
                     if (byEmail) {
                         const [updated] = await db
                             .update(users)
-                            .set({ googleId: profile.id, avatar: profile.photos?.[0]?.value ?? byEmail.avatar })
+                            .set({
+                                googleId: profile.id,
+                                avatar: profile.photos?.[0]?.value ?? byEmail.avatar,
+                                googleAccessToken: accessToken,
+                                ...(refreshToken ? { googleRefreshToken: refreshToken } : {})
+                            })
                             .where(eq(users.id, byEmail.id))
                             .returning();
                         return done(null, { id: updated.id, email: updated.email, name: updated.name, avatar: updated.avatar });
@@ -80,6 +109,8 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
                             googleId: profile.id,
                             avatar: profile.photos?.[0]?.value,
                             password: null,
+                            googleAccessToken: accessToken,
+                            googleRefreshToken: refreshToken || null,
                         })
                         .returning();
                     return done(null, { id: created.id, email: created.email, name: created.name, avatar: created.avatar });

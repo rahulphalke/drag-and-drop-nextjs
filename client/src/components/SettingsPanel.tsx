@@ -19,9 +19,7 @@ export function SettingsPanel({ isActive = true, onOpenSettings }: SettingsPanel
     selectedFieldId,
     updateField,
     whatsappNumber,
-    setWhatsappNumber,
-    googleSheetUrl,
-    setGoogleSheetUrl
+    setWhatsappNumber
   } = useFormBuilderStore();
 
   const selectedField = fields.find((f) => f.id === selectedFieldId);
