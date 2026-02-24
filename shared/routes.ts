@@ -25,6 +25,14 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    getPublic: {
+      method: 'GET' as const,
+      path: '/api/forms/public/:shareId' as const,
+      responses: {
+        200: z.custom<typeof forms.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
     create: {
       method: 'POST' as const,
       path: '/api/forms' as const,
@@ -54,7 +62,7 @@ export const api = {
     },
     create: {
       method: 'POST' as const,
-      path: '/api/forms/:formId/submissions' as const,
+      path: '/api/forms/share/:shareId/submissions' as const,
       responses: {
         201: z.custom<any>(),
         400: errorSchemas.validation,

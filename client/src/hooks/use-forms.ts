@@ -27,6 +27,20 @@ export function useForm(id: number) {
   });
 }
 
+export function usePublicForm(shareId: string | undefined) {
+  return useQuery({
+    queryKey: [api.forms.getPublic.path, shareId],
+    queryFn: async () => {
+      const url = buildUrl(api.forms.getPublic.path, { shareId: shareId! });
+      const res = await fetch(url);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error("Failed to fetch public form");
+      return api.forms.getPublic.responses[200].parse(await res.json());
+    },
+    enabled: !!shareId,
+  });
+}
+
 export function useCreateForm() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

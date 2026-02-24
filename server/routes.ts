@@ -106,19 +106,32 @@ export async function registerRoutes(
   });
 
   // GET /api/forms/:id
-  app.get(api.forms.get.path, async (req, res) => {
+  app.get(api.forms.get.path, requireAuth, async (req, res) => {
     const form = await storage.getForm(Number(req.params.id));
     if (!form) {
       return res.status(404).json({ message: 'Form not found' });
     }
 
-    // Hide integration secrets from non-owners
-    if (!req.user || (req.user as any).id !== form.userId) {
-      const safeForm = { ...form, whatsappNumber: null, googleSheetUrl: null };
-      return res.json(safeForm);
+    // Protect: ensure user owns the form
+    if (form.userId !== (req.user as any).id) {
+      return res.status(403).json({ message: "You don't have permission to access this form" });
     }
 
     res.json(form);
+  });
+
+  // GET /api/forms/public/:shareId
+  app.get(api.forms.getPublic.path, async (req, res) => {
+    const form = await storage.getFormByShareId(req.params.shareId);
+    if (!form) {
+      return res.status(404).json({ message: 'Form not found' });
+    }
+
+    // Strip sensitive integration secrets for public sharing, 
+    // but keep whatsappNumber for client-side redirection
+    console.log(`[GET public form] shareId: ${req.params.shareId}, whatsappNumber: ${form.whatsappNumber}`);
+    const safeForm = { ...form, googleSheetUrl: null };
+    res.json(safeForm);
   });
 
   // POST /api/forms
@@ -167,6 +180,7 @@ export async function registerRoutes(
         }
 
         const input = api.forms.update.input.parse(body);
+        console.log(`[POST /api/forms/save] Updating form ${body.id}, whatsappNumber: ${input.whatsappNumber}`);
         const form = await storage.updateForm(Number(body.id), input);
         res.json(form);
       } else {
@@ -187,18 +201,19 @@ export async function registerRoutes(
 
   // ── Submission routes ────────────────────────────────────────────────────────
 
-  // POST /api/forms/:formId/submissions
+  // POST /api/forms/share/:shareId/submissions
   app.post(api.submissions.create.path, async (req, res) => {
     try {
-      const formId = Number(req.params.formId);
-      const form = await storage.getForm(formId);
+      const shareId = req.params.shareId;
+      const form = await storage.getFormByShareId(shareId);
       if (!form) {
         return res.status(404).json({ message: "Form not found" });
       }
 
+      const formId = form.id;
       const submission = await storage.createSubmission(formId, req.body);
 
-      console.log(`New submission for form ${formId}. Integration settings:`, {
+      console.log(`New submission for form ${formId} (${shareId}). Integration settings:`, {
         whatsappNumber: form.whatsappNumber,
         googleSheetUrl: form.googleSheetUrl
       });

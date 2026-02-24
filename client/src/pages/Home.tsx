@@ -36,8 +36,8 @@ export default function Home() {
   const [qrCodeFormId, setQrCodeFormId] = useState<number | null>(null);
   const { toast } = useToast();
 
-  const handleCopyLink = (id: number, slug: string) => {
-    const url = `${window.location.host}/share/${id}/${slug}`;
+  const handleCopyLink = (shareId: string, slug: string) => {
+    const url = `${window.location.protocol}//${window.location.host}/share/${shareId}/${slug}`;
     navigator.clipboard.writeText(url);
     toast({
       title: "Link Copied",
@@ -58,28 +58,12 @@ export default function Home() {
             <p className="text-muted-foreground text-sm sm:text-lg">Manage and build your data collection forms.</p>
           </div>
           <div className="flex items-center gap-3 self-start sm:self-auto">
-            {user && (
-              <div className="hidden sm:flex items-center gap-2 mr-2 px-3 py-1.5 bg-white border border-border rounded-full shadow-sm">
-                <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
-                  {user.name.charAt(0).toUpperCase()}
-                </div>
-                <span className="text-sm font-medium text-muted-foreground">{user.name}</span>
-              </div>
-            )}
             <Link href="/builder">
               <Button className="shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5 transition-all">
                 <Plus className="w-4 h-4 mr-2" />
                 Create Form
               </Button>
             </Link>
-            <Button
-              variant="outline"
-              onClick={() => logout.mutate()}
-              disabled={logout.isPending}
-              className="text-muted-foreground hover:text-destructive hover:border-destructive/30 hover:bg-destructive/5"
-            >
-              {logout.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Logout"}
-            </Button>
           </div>
         </div>
 
@@ -89,9 +73,7 @@ export default function Home() {
             <Loader2 className="w-10 h-10 animate-spin text-primary" />
           </div>
         ) : error ? (
-          <div className="bg-destructive/10 text-destructive p-6 rounded-xl border border-destructive/20 text-center">
-            Failed to load forms. Please try again.
-          </div>
+          null
         ) : forms?.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-border">
             <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
@@ -131,7 +113,7 @@ export default function Home() {
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                handleCopyLink(form.id, form.slug);
+                                handleCopyLink(form.shareId, form.slug);
                               }}
                             >
                               <Copy className="w-4 h-4" />
@@ -199,7 +181,7 @@ export default function Home() {
       {(() => {
         const qrForm = forms?.find(f => f.id === qrCodeFormId);
         if (!qrForm) return null;
-        const url = `${window.location.origin}/share/${qrForm.id}/${qrForm.slug}`;
+        const url = `${window.location.origin}/share/${qrForm.shareId}/${qrForm.slug}`;
         return (
           <QRCodeDialog
             open={qrCodeFormId !== null}

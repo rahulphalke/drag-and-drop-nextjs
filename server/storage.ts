@@ -1,4 +1,5 @@
 import { forms, submissions, type InsertForm, type Form, type Submission } from "@shared/schema";
+import { nanoid } from "nanoid";
 
 function slugify(text: string): string {
   return text
@@ -13,6 +14,7 @@ function slugify(text: string): string {
 export interface IStorage {
   getForms(userId?: number): Promise<Form[]>;
   getForm(id: number): Promise<Form | undefined>;
+  getFormByShareId(shareId: string): Promise<Form | undefined>;
   createForm(form: InsertForm, userId: number): Promise<Form>;
   updateForm(id: number, updates: Partial<InsertForm>): Promise<Form>;
   // Submissions
@@ -38,6 +40,10 @@ export class MemoryStorage implements IStorage {
     return this.forms.find((f) => f.id === id);
   }
 
+  async getFormByShareId(shareId: string): Promise<Form | undefined> {
+    return this.forms.find((f) => f.shareId === shareId);
+  }
+
   async createForm(insertForm: InsertForm, userId: number): Promise<Form> {
     const form: Form = {
       createdAt: new Date(),
@@ -47,6 +53,7 @@ export class MemoryStorage implements IStorage {
       ...insertForm,
       id: this.nextId++,
       userId,
+      shareId: nanoid(12),
       slug: (insertForm as any).slug || slugify(insertForm.title),
     };
     this.forms.push(form);
@@ -113,12 +120,21 @@ export class DatabaseStorage implements IStorage {
     return form;
   }
 
+  async getFormByShareId(shareId: string): Promise<Form | undefined> {
+    const [form] = await this.db
+      .select()
+      .from(this.formsTable)
+      .where(this.eq(this.formsTable.shareId, shareId));
+    return form;
+  }
+
   async createForm(insertForm: InsertForm, userId: number): Promise<Form> {
     const [form] = await this.db
       .insert(this.formsTable)
       .values({
         ...insertForm,
         userId,
+        shareId: nanoid(12),
         slug: (insertForm as any).slug || slugify(insertForm.title),
       })
       .returning();

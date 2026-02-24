@@ -1,0 +1,42 @@
+[
+  {
+    "column_name": "fields",
+    "data_type": "jsonb"
+  },
+  {
+    "column_name": "created_at",
+    "data_type": "timestamp without time zone"
+  },
+  {
+    "column_name": "user_id",
+    "data_type": "integer"
+  },
+  {
+    "column_name": "id",
+    "data_type": "integer"
+  },
+  {
+    "column_name": "google_sheet_url",
+    "data_type": "text"
+  },
+  {
+    "column_name": "submit_button_text",
+    "data_type": "text"
+  },
+  {
+    "column_name": "share_id",
+    "data_type": "text"
+  },
+  {
+    "column_name": "title",
+    "data_type": "text"
+  },
+  {
+    "column_name": "slug",
+    "data_type": "text"
+  },
+  {
+    "column_name": "whatsapp_number",
+    "data_type": "text"
+  }
+]

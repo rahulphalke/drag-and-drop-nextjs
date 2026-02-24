@@ -1,5 +1,6 @@
 import { useParams } from "wouter";
-import { useForm } from "@/hooks/use-forms";
+import { useForm, usePublicForm } from "@/hooks/use-forms";
+import { type FormField, type Form } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,21 +20,21 @@ import { api, buildUrl } from "@shared/routes";
 import { useMutation } from "@tanstack/react-query";
 
 export default function ShareForm() {
-    const params = useParams<{ id: string }>();
+    const params = useParams<{ shareId: string }>();
     const { toast } = useToast();
-    const formId = parseInt(params.id, 10);
-    const { data: form, isLoading, error } = useForm(formId);
+    const shareId = params.shareId;
+    const { data: form, isLoading, error } = usePublicForm(shareId);
 
     useEffect(() => {
         if (form) {
-            document.title = `${form.title} | AntiGravity Form Builder`;
+            document.title = `${form.title} | Form Builder`;
             let metaDescription = document.querySelector('meta[name="description"]');
             if (metaDescription) {
-                metaDescription.setAttribute("content", `Fill out the ${form.title} form. Powered by AntiGravity Form Builder.`);
+                metaDescription.setAttribute("content", `Fill out the ${form.title} form.`);
             } else {
                 metaDescription = document.createElement('meta');
                 (metaDescription as HTMLMetaElement).name = "description";
-                (metaDescription as HTMLMetaElement).content = `Fill out the ${form.title} form. Powered by AntiGravity Form Builder.`;
+                (metaDescription as HTMLMetaElement).content = `Fill out the ${form.title} form.`;
                 document.head.appendChild(metaDescription);
             }
         }
@@ -45,7 +46,7 @@ export default function ShareForm() {
 
     const submitMutation = useMutation({
         mutationFn: async (data: any) => {
-            const url = buildUrl(api.submissions.create.path, { formId });
+            const url = buildUrl(api.submissions.create.path, { shareId });
             const res = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -67,7 +68,7 @@ export default function ShareForm() {
                 console.log("WhatsApp number found:", form.whatsappNumber);
                 const message = Object.entries(formData)
                     .map(([key, value]) => {
-                        const field = form.fields.find(f => f.id === key);
+                        const field = form.fields.find((f: FormField) => f.id === key);
                         return `*${field?.label || key}*: ${value}`;
                     })
                     .join("\n");
@@ -153,7 +154,7 @@ export default function ShareForm() {
                     </CardHeader>
                     <CardContent className="pt-8 text-left">
                         <form onSubmit={handleSubmit} className="space-y-8">
-                            {form.fields.map((field) => (
+                            {form.fields.map((field: FormField) => (
                                 <div key={field.id} className="space-y-3">
                                     {field.type !== 'title' && (
                                         <Label className="text-sm font-semibold text-foreground flex items-center gap-1">
@@ -248,7 +249,7 @@ export default function ShareForm() {
                                                 <SelectValue placeholder={field.placeholder || "Select an option"} />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {field.options?.map((opt) => (
+                                                {field.options?.map((opt: string) => (
                                                     <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -259,7 +260,7 @@ export default function ShareForm() {
                                         <>
                                             {field.options && field.options.length > 0 ? (
                                                 <div className="space-y-2">
-                                                    {field.options.map((opt, i) => (
+                                                    {field.options.map((opt: string, i: number) => (
                                                         <div key={i} className="flex items-center space-x-3 p-3 rounded-lg border border-border/50 bg-white/50 hover:bg-white transition-colors cursor-pointer">
                                                             <Checkbox
                                                                 id={`${field.id}-${i}`}
@@ -291,7 +292,7 @@ export default function ShareForm() {
                                             onValueChange={(val) => setFormData({ ...formData, [field.id]: val })}
                                             className="space-y-2"
                                         >
-                                            {field.options?.map((opt, i) => (
+                                            {field.options?.map((opt: string, i: number) => (
                                                 <div key={i} className="flex items-center space-x-3 p-2 rounded-md hover:bg-white/50 transition-colors">
                                                     <RadioGroupItem value={opt} id={`${field.id}-${i}`} />
                                                     <Label htmlFor={`${field.id}-${i}`} className="font-normal cursor-pointer">{opt}</Label>
@@ -343,9 +344,6 @@ export default function ShareForm() {
                     </CardContent>
                 </Card>
 
-                <p className="text-center text-xs text-muted-foreground pt-4">
-                    Powered by AntiGravity Form Builder
-                </p>
             </div>
         </div>
     );

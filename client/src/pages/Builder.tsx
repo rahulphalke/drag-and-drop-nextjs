@@ -200,8 +200,9 @@ export default function Builder() {
   };
 
   const handleCopyLink = () => {
+    const shareId = existingForm?.shareId;
     const slug = existingForm?.slug || slugify(formTitle);
-    const link = `${window.location.host}/share/${editId}/${slug}`;
+    const link = `${window.location.host}/share/${shareId}/${slug}`;
     navigator.clipboard.writeText(link);
     toast({
       title: "Link Copied",
@@ -364,7 +365,7 @@ export default function Builder() {
               </Label>
               <Input
                 id="link"
-                defaultValue={`${window.location.host}/share/${editId}/${existingForm?.slug || slugify(formTitle)}`}
+                defaultValue={`${window.location.host}/share/${existingForm?.shareId}/${existingForm?.slug || slugify(formTitle)}`}
                 readOnly
                 className="h-10 px-3 bg-muted"
               />

@@ -73,7 +73,7 @@ export default function Login() {
                             <rect x="14" y="14" width="7" height="7" rx="1.5" fill="white" opacity="0.9" />
                         </svg>
                     </div>
-                    <span className="login-brand-name">FormCraft</span>
+                    <span className="login-brand-name">Form Builder</span>
                 </div>
 
                 <h1 className="login-title">
@@ -81,8 +81,8 @@ export default function Login() {
                 </h1>
                 <p className="login-subtitle">
                     {tab === "login"
-                        ? "Sign in to access your form builder"
-                        : "Start building beautiful forms for free"}
+                        ? "Sign in to access your forms"
+                        : "Start building beautiful forms today"}
                 </p>
 
                 {/* Tab switcher */}

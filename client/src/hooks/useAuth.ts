@@ -31,6 +31,7 @@ export function useLogin() {
         },
         onSuccess: (user) => {
             qc.setQueryData(["/api/auth/me"], user);
+            qc.invalidateQueries();
         },
     });
 }
@@ -44,6 +45,7 @@ export function useRegister() {
         },
         onSuccess: (user) => {
             qc.setQueryData(["/api/auth/me"], user);
+            qc.invalidateQueries();
         },
     });
 }

@@ -25,7 +25,7 @@ export default function Preview() {
 
     useEffect(() => {
         if (form) {
-            document.title = `Preview: ${form.title} | AntiGravity Form Builder`;
+            document.title = `Preview: ${form.title} | Form Builder`;
         }
     }, [form]);
 

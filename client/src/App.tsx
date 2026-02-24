@@ -10,6 +10,7 @@ import Preview from "@/pages/Preview";
 import ShareForm from "@/pages/ShareForm";
 import Login from "@/pages/Login";
 import { useUser } from "@/hooks/useAuth";
+import { Header } from "@/components/Header";
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading } = useUser();
@@ -23,7 +24,14 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) return <Redirect to="/login" />;
-  return <>{children}</>;
+  return (
+    <div className="flex flex-col min-h-screen">
+      <Header />
+      <main className="flex-1 overflow-auto">
+        {children}
+      </main>
+    </div>
+  );
 }
 
 function Router() {
@@ -46,7 +54,7 @@ function Router() {
         </AuthGuard>
       </Route>
       <Route path="/preview/:id" component={Preview} />
-      <Route path="/share/:id/:slug?" component={ShareForm} />
+      <Route path="/share/:shareId/:slug?" component={ShareForm} />
       <Route component={NotFound} />
     </Switch>
   );
