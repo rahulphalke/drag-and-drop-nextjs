@@ -202,7 +202,7 @@ export default function Builder() {
   const handleCopyLink = () => {
     const shareId = existingForm?.shareId;
     const slug = existingForm?.slug || slugify(formTitle);
-    const link = `${window.location.host}/share/${shareId}/${slug}`;
+    const link = `${window.location.protocol}//${window.location.host}/share/${shareId}/${slug}`;
     navigator.clipboard.writeText(link);
     toast({
       title: "Link Copied",
@@ -365,7 +365,7 @@ export default function Builder() {
               </Label>
               <Input
                 id="link"
-                defaultValue={`${window.location.host}/share/${existingForm?.shareId}/${existingForm?.slug || slugify(formTitle)}`}
+                defaultValue={`${window.location.protocol}//${window.location.host}/share/${existingForm?.shareId}/${existingForm?.slug || slugify(formTitle)}`}
                 readOnly
                 className="h-10 px-3 bg-muted"
               />
@@ -392,7 +392,7 @@ export default function Builder() {
             <div className="space-y-2">
               <Label>Form Link</Label>
               <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 w-full overflow-hidden">
-                <span className="text-xs text-muted-foreground truncate shrink min-w-[50px]">{window.location.host}/share/{editId || '...'}/</span>
+                <span className="text-xs text-muted-foreground truncate shrink min-w-[50px]">{window.location.host}/share/{existingForm?.shareId || '...'}/</span>
                 <input
                   className="flex-1 bg-transparent text-sm outline-none min-w-0"
                   placeholder={slugify(formTitle) || "form-link"}
