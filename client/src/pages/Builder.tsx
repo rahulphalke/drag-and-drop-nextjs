@@ -228,9 +228,9 @@ export default function Builder() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
+    <div className="h-screen flex flex-col bg-background/50 overflow-hidden">
       {/* Header */}
-      <header className="h-14 sm:h-16 border-b border-border bg-white px-3 sm:px-6 flex items-center justify-between shrink-0 z-10">
+      <header className="h-14 sm:h-16 border-b border-border/40 glass-morphism px-3 sm:px-6 flex items-center justify-between shrink-0 z-50 sticky top-0">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <Button variant="ghost" size="icon" onClick={() => setLocation("/")}>
             <ArrowLeft className="w-5 h-5" />
@@ -386,64 +386,70 @@ export default function Builder() {
               Configure your form link, integrations, and submission behaviour.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-5 pt-4">
+          <div className="space-y-6 pt-4">
 
             {/* Form Link */}
             <div className="space-y-2">
-              <Label>Form Link</Label>
-              <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 w-full overflow-hidden">
-                <span className="text-xs text-muted-foreground truncate shrink min-w-[50px]">{window.location.host}/share/{existingForm?.shareId || '...'}/</span>
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">Form Link</Label>
+              <div className="flex flex-col gap-1.5 rounded-xl border border-border/50 bg-muted/20 p-3 w-full">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <span className="text-[11px] text-muted-foreground/60 whitespace-nowrap">{window.location.protocol}//{window.location.host}/share/</span>
+                  <span className="text-[11px] font-mono text-primary/70 bg-primary/5 px-1.5 py-0.5 rounded truncate">
+                    {existingForm?.shareId || '...'}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground/60">/</span>
+                </div>
                 <input
-                  className="flex-1 bg-transparent text-sm outline-none min-w-0"
+                  className="w-full bg-white/50 border border-border/50 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all font-medium"
                   placeholder={slugify(formTitle) || "form-link"}
                   value={localSlug}
                   onChange={(e) => setLocalSlug(slugify(e.target.value))}
                 />
               </div>
-              <p className="text-[10px] text-muted-foreground">Changing this updates the shareable URL for your form.</p>
+              <p className="text-[10px] text-muted-foreground/60 italic">Changing this updates the shareable URL for your form.</p>
             </div>
 
             {/* WhatsApp Number */}
             <div className="space-y-2">
-              <Label>WhatsApp Number</Label>
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">WhatsApp Number</Label>
               <Input
                 id="whatsapp"
                 placeholder="e.g. 919876543210"
                 value={localWhatsapp}
                 onChange={(e) => setLocalWhatsapp(e.target.value)}
-                className="bg-muted/30"
+                className="input-premium h-11 rounded-xl"
               />
-              <p className="text-[10px] text-muted-foreground">Include country code, no "+" or spaces.</p>
+              <p className="text-[10px] text-muted-foreground/60">Include country code, no "+" or spaces.</p>
             </div>
 
             {/* Google Sheet URL */}
             <div className="space-y-2">
-              <Label>Google Sheet URL (Webhook)</Label>
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">Google Sheet URL (Webhook)</Label>
               <Input
                 id="gsheet"
                 placeholder="https://script.google.com/..."
                 value={localGoogleSheet}
                 onChange={(e) => setLocalGoogleSheet(e.target.value)}
-                className="bg-muted/30"
+                className="input-premium h-11 rounded-xl"
               />
-              <p className="text-[10px] text-muted-foreground">POST request will be sent to this URL on submission.</p>
+              <p className="text-[10px] text-muted-foreground/60">POST request will be sent to this URL on submission.</p>
             </div>
 
             {/* Submit Button Text */}
             <div className="space-y-2">
-              <Label>Submit Button Text</Label>
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">Submit Button Text</Label>
               <Input
                 placeholder="Submit"
                 value={localSubmitText}
                 onChange={(e) => setLocalSubmitText(e.target.value)}
-                className="bg-muted/30"
+                className="input-premium h-11 rounded-xl"
               />
-              <p className="text-[10px] text-muted-foreground">Customise the label on the submit button.</p>
+              <p className="text-[10px] text-muted-foreground/60">Customise the label on the submit button.</p>
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-4 pt-4">
               <Button
-                variant="outline"
+                variant="ghost"
                 onClick={() => {
                   setLocalWhatsapp(whatsappNumber || "");
                   setLocalGoogleSheet(googleSheetUrl || "");
@@ -451,7 +457,7 @@ export default function Builder() {
                   setLocalSubmitText(submitButtonText || "");
                   setShowSettingsDialog(false);
                 }}
-                className="flex-1"
+                className="flex-1 rounded-xl hover:bg-muted"
               >
                 Cancel
               </Button>
@@ -473,7 +479,7 @@ export default function Builder() {
                     });
                   }, 0);
                 }}
-                className="flex-1"
+                className="flex-[2] rounded-xl shadow-lg shadow-primary/20"
               >
                 {(createForm.isPending || updateForm.isPending) ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />

@@ -90,7 +90,7 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {forms?.map((form) => (
-              <Card key={form.id} className="hover:shadow-lg transition-all hover:border-primary/50 group cursor-pointer bg-white">
+              <Card key={form.id} className="premium-shadow-hover group cursor-pointer bg-white border-border/40 overflow-hidden">
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex gap-2 items-center">

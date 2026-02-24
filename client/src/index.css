@@ -72,6 +72,7 @@
 @layer base {
   html {
     overflow-x: hidden;
+    scroll-behavior: smooth;
   }
 
   body {
@@ -89,6 +90,24 @@
     font-family: var(--font-display);
     @apply tracking-tight;
   }
+}
+
+/* ─── Design Perfection Utilities ────────────────────────────────────────── */
+
+.glass-morphism {
+  @apply bg-white/70 backdrop-blur-md border border-white/20;
+}
+
+.premium-shadow {
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 5px 15px -8px rgba(0, 0, 0, 0.05);
+}
+
+.premium-shadow-hover {
+  @apply transition-all duration-300 hover:shadow-2xl hover:shadow-primary/10 hover:-translate-y-0.5 hover:border-primary/20;
+}
+
+.input-premium {
+  @apply bg-muted/30 border-transparent focus:bg-white focus:border-primary/30 transition-all duration-200;
 }
 
 /* Custom scrollbar for better aesthetics */

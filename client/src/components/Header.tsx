@@ -19,7 +19,7 @@ export function Header() {
     if (!user) return null;
 
     return (
-        <header className="h-16 border-b border-border bg-white px-4 sm:px-8 flex items-center justify-between shrink-0 z-50">
+        <header className="h-16 border-b border-border/40 glass-morphism px-4 sm:px-8 flex items-center justify-between shrink-0 z-50 sticky top-0">
             <div className="flex items-center gap-2">
                 <Link href="/" className="flex items-center gap-2 group">
                     <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white shadow-lg group-hover:scale-105 transition-transform">
