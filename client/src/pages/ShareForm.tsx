@@ -141,10 +141,10 @@ export default function ShareForm() {
     };
 
     return (
-        <div className="min-h-screen bg-muted/30 py-8 px-4 sm:py-12 flex flex-col items-center">
+        <div className="min-h-screen bg-background/50 py-8 px-4 sm:py-12 flex flex-col items-center">
             <div className="max-w-2xl w-full space-y-6">
-                <Card className="border-none shadow-2xl bg-white">
-                    <CardHeader className="space-y-1 pb-8 border-b border-border/50">
+                <Card className="border-none premium-shadow-hover glass-morphism overflow-hidden">
+                    <CardHeader className="space-y-1 pb-8 border-b border-border/40">
                         <CardTitle className="text-3xl font-display font-bold text-foreground">
                             {form.title}
                         </CardTitle>
@@ -168,7 +168,7 @@ export default function ShareForm() {
                                             placeholder={field.placeholder}
                                             required={field.required}
                                             onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
-                                            className="h-11 bg-white"
+                                            className="h-11 input-premium rounded-xl"
                                         />
                                     )}
 
@@ -177,7 +177,7 @@ export default function ShareForm() {
                                             placeholder={field.placeholder}
                                             required={field.required}
                                             onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
-                                            className="min-h-[120px] bg-white"
+                                            className="min-h-[120px] input-premium rounded-xl"
                                         />
                                     )}
 
@@ -330,7 +330,7 @@ export default function ShareForm() {
 
                             <Button
                                 type="submit"
-                                className="w-full h-12 text-lg font-bold shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all mt-4"
+                                className="w-full h-12 text-lg font-bold shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all mt-4 rounded-xl"
                                 disabled={submitMutation.isPending}
                             >
                                 {submitMutation.isPending ? (

@@ -59,8 +59,8 @@ export default function Preview() {
     };
 
     return (
-        <div className="min-h-screen bg-muted/30 py-8 px-4 sm:py-12">
-            <div className="max-w-2xl mx-auto space-y-6">
+        <div className="min-h-screen bg-background/50 py-8 px-4 sm:py-12 flex flex-col items-center">
+            <div className="max-w-2xl w-full space-y-6">
                 <Button
                     variant="ghost"
                     size="sm"
@@ -71,13 +71,13 @@ export default function Preview() {
                     Back to Editor
                 </Button>
 
-                <Card className="border-none shadow-2xl bg-white/80 backdrop-blur-sm">
-                    <CardHeader className="space-y-1 pb-8 border-b border-border/50">
+                <Card className="border-none premium-shadow-hover glass-morphism overflow-hidden">
+                    <CardHeader className="space-y-1 pb-8 border-b border-border/40">
                         <CardTitle className="text-3xl font-display font-bold text-foreground">
                             {form.title}
                         </CardTitle>
                         <CardDescription className="text-base text-muted-foreground">
-                            Please fill out the form below.
+                            This is a preview of your published form.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-8">
@@ -96,7 +96,7 @@ export default function Preview() {
                                             placeholder={field.placeholder}
                                             required={field.required}
                                             onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
-                                            className="h-11 bg-white border-border/50 focus:border-primary focus:ring-primary/20 transition-all"
+                                            className="h-11 input-premium rounded-xl"
                                         />
                                     )}
 
@@ -105,7 +105,7 @@ export default function Preview() {
                                             placeholder={field.placeholder}
                                             required={field.required}
                                             onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
-                                            className="min-h-[120px] bg-white border-border/50 focus:border-primary transition-all"
+                                            className="min-h-[120px] input-premium rounded-xl"
                                         />
                                     )}
 
