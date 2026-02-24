@@ -12,6 +12,8 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   googleId: text("google_id").unique(),
   avatar: text("avatar"),
+  googleRefreshToken: text("google_refresh_token"), // For Sheets API offline access
+  googleAccessToken: text("google_access_token"),   // Cached access token
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -47,7 +49,8 @@ export const forms = pgTable("forms", {
   slug: text("slug").notNull(),
   fields: jsonb("fields").notNull().$type<FormField[]>(),
   whatsappNumber: text("whatsapp_number"),
-  googleSheetUrl: text("google_sheet_url"),
+  googleSheetId: text("google_sheet_id"),     // Direct sheet ID
+  googleSheetName: text("google_sheet_name"),   // Display name for UI
   submitButtonText: text("submit_button_text"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -67,7 +70,8 @@ export const insertFormSchema = createInsertSchema(forms)
     fields: z.array(formFieldSchema),
     slug: z.string().optional(),
     whatsappNumber: z.string().optional().nullable(),
-    googleSheetUrl: z.string().url("Invalid URL").optional().nullable(),
+    googleSheetId: z.string().optional().nullable(),
+    googleSheetName: z.string().optional().nullable(),
     submitButtonText: z.string().optional().nullable(),
   });
 

@@ -15,6 +15,7 @@ import { Canvas } from "@/components/Canvas";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { useFormBuilderStore } from "@/lib/store";
 import { useCreateForm, useUpdateForm, useForm } from "@/hooks/use-forms";
+import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,11 +59,12 @@ export default function Builder() {
     setFields,
     resetForm,
     whatsappNumber,
-    googleSheetUrl,
+    googleSheetId,
+    googleSheetName,
     submitButtonText,
     formSlug,
     setWhatsappNumber,
-    setGoogleSheetUrl,
+    setGoogleSheet,
     setSubmitButtonText,
     setFormSlug,
   } = useFormBuilderStore();
@@ -72,23 +74,31 @@ export default function Builder() {
   const updateForm = useUpdateForm();
   const { data: existingForm, isLoading: isLoadingForm } = useForm(editId ?? NaN);
 
+  const { data: googleSheets, isLoading: isLoadingSheets, refetch: refetchSheets } = useQuery({
+    queryKey: ['/api/integrations/google/sheets'],
+    retry: false, // Don't retry auth errors
+    refetchOnWindowFocus: true,
+  });
+
   const [activeDragType, setActiveDragType] = useState<FieldType | null>(null);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("canvas");
   const [hydrated, setHydrated] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [localWhatsapp, setLocalWhatsapp] = useState(whatsappNumber || "");
-  const [localGoogleSheet, setLocalGoogleSheet] = useState(googleSheetUrl || "");
+  const [localGoogleSheetId, setLocalGoogleSheetId] = useState(googleSheetId || "");
+  const [localGoogleSheetName, setLocalGoogleSheetName] = useState(googleSheetName || "");
   const [localSlug, setLocalSlug] = useState(formSlug || "");
   const [localSubmitText, setLocalSubmitText] = useState(submitButtonText || "");
 
   // Update local state when store changes (e.g. on load)
   useEffect(() => {
     setLocalWhatsapp(whatsappNumber || "");
-    setLocalGoogleSheet(googleSheetUrl || "");
+    setLocalGoogleSheetId(googleSheetId || "");
+    setLocalGoogleSheetName(googleSheetName || "");
     setLocalSlug(formSlug || "");
     setLocalSubmitText(submitButtonText || "");
-  }, [whatsappNumber, googleSheetUrl, formSlug, submitButtonText]);
+  }, [whatsappNumber, googleSheetId, googleSheetName, formSlug, submitButtonText]);
 
   // Reset hydrated state when switching between forms or between edit/create
   useEffect(() => {
@@ -102,7 +112,7 @@ export default function Builder() {
         setTitle(existingForm.title);
         setFields(existingForm.fields);
         setWhatsappNumber(existingForm.whatsappNumber || null);
-        setGoogleSheetUrl(existingForm.googleSheetUrl || null);
+        setGoogleSheet((existingForm as any).googleSheetId || null, (existingForm as any).googleSheetName || null);
         setFormSlug(existingForm.slug || null);
         setSubmitButtonText((existingForm as any).submitButtonText || null);
         setHydrated(true);
@@ -166,7 +176,8 @@ export default function Builder() {
           title: currentState.formTitle,
           fields: currentState.fields,
           whatsappNumber: currentState.whatsappNumber,
-          googleSheetUrl: currentState.googleSheetUrl,
+          googleSheetId: currentState.googleSheetId,
+          googleSheetName: currentState.googleSheetName,
           slug: currentState.formSlug || undefined,
           submitButtonText: currentState.submitButtonText,
         },
@@ -182,7 +193,8 @@ export default function Builder() {
           title: currentState.formTitle,
           fields: currentState.fields,
           whatsappNumber: currentState.whatsappNumber,
-          googleSheetUrl: currentState.googleSheetUrl,
+          googleSheetId: currentState.googleSheetId,
+          googleSheetName: currentState.googleSheetName,
           submitButtonText: currentState.submitButtonText,
         },
         {
@@ -244,6 +256,29 @@ export default function Builder() {
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          <Button
+            variant="outline"
+            className="hidden sm:flex border-green-200 text-green-700 bg-green-50 hover:bg-green-100 hover:text-green-800"
+            onClick={() => {
+              if (googleSheets) {
+                refetchSheets(); // Ensure we have the latest sheets when opening
+                setShowSettingsDialog(true);
+              } else {
+                window.location.href = '/api/auth/google';
+              }
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-4 h-4">
+                <path fill="#11823B" d="M41.5,4h-35C4.01,4,2,6.01,2,8.5v31C2,41.99,4.01,44,6.5,44h35c2.49,0,4.5-2.01,4.5-4.5v-31C46,6.01,43.99,4,41.5,4z" />
+                <path fill="#FFF" d="M37.5,14h-27v4h27V14z M37.5,22h-27v4h27V22z M37.5,30h-27v4h27V30z" />
+              </svg>
+              <span className="hidden sm:inline">
+                {googleSheetId ? "Sheet Connected" : "Connect Google"}
+              </span>
+            </div>
+          </Button>
+
           <Button
             variant="outline"
             onClick={() => {
@@ -416,17 +451,51 @@ export default function Builder() {
               <p className="text-[10px] text-muted-foreground">Include country code, no "+" or spaces.</p>
             </div>
 
-            {/* Google Sheet URL */}
+            {/* Google Sheet Direct Integration */}
             <div className="space-y-2">
-              <Label>Google Sheet URL (Webhook)</Label>
-              <Input
-                id="gsheet"
-                placeholder="https://script.google.com/..."
-                value={localGoogleSheet}
-                onChange={(e) => setLocalGoogleSheet(e.target.value)}
-                className="bg-muted/30"
-              />
-              <p className="text-[10px] text-muted-foreground">POST request will be sent to this URL on submission.</p>
+              <Label>Google Sheet Data Sink</Label>
+              {isLoadingSheets ? (
+                <div className="flex items-center text-sm text-muted-foreground"><Loader2 className="w-3 h-3 mr-2 animate-spin" /> Loading sheets...</div>
+              ) : googleSheets && Array.isArray(googleSheets) ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={localGoogleSheetId}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        const selectedSheet = googleSheets.find((s: any) => s.id === selectedId);
+                        setLocalGoogleSheetId(selectedId);
+                        setLocalGoogleSheetName(selectedSheet ? selectedSheet.name : "");
+                      }}
+                    >
+                      <option value="">Select a Spreadsheet...</option>
+                      {googleSheets.map((sheet: any) => (
+                        <option key={sheet.id} value={sheet.id}>
+                          {sheet.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => refetchSheets()}
+                      title="Refresh Sheets"
+                      type="button"
+                    >
+                      <Loader2 className={cn("w-4 h-4", isLoadingSheets && "animate-spin")} />
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground pr-4">Submissions will be automatically added as new rows in this spreadsheet.</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm text-muted-foreground">Google account not connected or authorization expired.</p>
+                  <Button variant="outline" size="sm" onClick={() => window.location.href = '/api/auth/google'}>
+                    Connect Google Account
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* Submit Button Text */}
@@ -446,7 +515,8 @@ export default function Builder() {
                 variant="outline"
                 onClick={() => {
                   setLocalWhatsapp(whatsappNumber || "");
-                  setLocalGoogleSheet(googleSheetUrl || "");
+                  setLocalGoogleSheetId(googleSheetId || "");
+                  setLocalGoogleSheetName(googleSheetName || "");
                   setLocalSlug(formSlug || "");
                   setLocalSubmitText(submitButtonText || "");
                   setShowSettingsDialog(false);
@@ -459,7 +529,7 @@ export default function Builder() {
                 disabled={createForm.isPending || updateForm.isPending}
                 onClick={async () => {
                   setWhatsappNumber(localWhatsapp || null);
-                  setGoogleSheetUrl(localGoogleSheet || null);
+                  setGoogleSheet(localGoogleSheetId || null, localGoogleSheetName || null);
                   setFormSlug(localSlug || null);
                   setSubmitButtonText(localSubmitText || null);
 
