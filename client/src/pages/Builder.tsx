@@ -27,7 +27,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Save, Eye, Loader2, Layers, Settings, Wrench, Share2, Copy } from "lucide-react";
+import { ArrowLeft, Save, Eye, Loader2, Layers, Settings, Wrench, Share2, Copy, Trash2, User } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { FieldType } from "@shared/schema";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
@@ -61,6 +68,7 @@ export default function Builder() {
     whatsappNumber,
     googleSheetId,
     googleSheetName,
+    connectedAccountId,
     submitButtonText,
     formSlug,
     setWhatsappNumber,
@@ -74,31 +82,47 @@ export default function Builder() {
   const updateForm = useUpdateForm();
   const { data: existingForm, isLoading: isLoadingForm } = useForm(editId ?? NaN);
 
+  // Define local state before useQuery hooks that depend on them
+  const [localWhatsapp, setLocalWhatsapp] = useState(whatsappNumber || "");
+  const [localGoogleSheetId, setLocalGoogleSheetId] = useState(googleSheetId || "");
+  const [localGoogleSheetName, setLocalGoogleSheetName] = useState(googleSheetName || "");
+  const [localAccountId, setLocalAccountId] = useState<number | null>(connectedAccountId || null);
+  const [localSlug, setLocalSlug] = useState(formSlug || "");
+  const [localSubmitText, setLocalSubmitText] = useState(submitButtonText || "");
+
+  const { data: accounts } = useQuery<{ id: number; email: string; name: string }[]>({
+    queryKey: ['/api/accounts'],
+  });
+
   const { data: googleSheets, isLoading: isLoadingSheets, refetch: refetchSheets } = useQuery({
-    queryKey: ['/api/integrations/google/sheets'],
-    retry: false, // Don't retry auth errors
+    queryKey: ['/api/integrations/google/sheets', localAccountId],
+    queryFn: async () => {
+      const response = await fetch(`/api/integrations/google/sheets${localAccountId ? `?accountId=${localAccountId}` : ''}`);
+      if (!response.ok) throw new Error('Failed to fetch sheets');
+      return response.json();
+    },
+    enabled: !!localAccountId,
+    retry: false,
     refetchOnWindowFocus: true,
   });
+
+  const isGoogleConnected = Array.isArray(accounts) && accounts.length > 0;
 
   const [activeDragType, setActiveDragType] = useState<FieldType | null>(null);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("canvas");
   const [hydrated, setHydrated] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-  const [localWhatsapp, setLocalWhatsapp] = useState(whatsappNumber || "");
-  const [localGoogleSheetId, setLocalGoogleSheetId] = useState(googleSheetId || "");
-  const [localGoogleSheetName, setLocalGoogleSheetName] = useState(googleSheetName || "");
-  const [localSlug, setLocalSlug] = useState(formSlug || "");
-  const [localSubmitText, setLocalSubmitText] = useState(submitButtonText || "");
 
   // Update local state when store changes (e.g. on load)
   useEffect(() => {
     setLocalWhatsapp(whatsappNumber || "");
     setLocalGoogleSheetId(googleSheetId || "");
     setLocalGoogleSheetName(googleSheetName || "");
+    setLocalAccountId(connectedAccountId || null);
     setLocalSlug(formSlug || "");
     setLocalSubmitText(submitButtonText || "");
-  }, [whatsappNumber, googleSheetId, googleSheetName, formSlug, submitButtonText]);
+  }, [whatsappNumber, googleSheetId, googleSheetName, connectedAccountId, formSlug, submitButtonText, showSettingsDialog]);
 
   // Reset hydrated state when switching between forms or between edit/create
   useEffect(() => {
@@ -112,9 +136,13 @@ export default function Builder() {
         setTitle(existingForm.title);
         setFields(existingForm.fields);
         setWhatsappNumber(existingForm.whatsappNumber || null);
-        setGoogleSheet((existingForm as any).googleSheetId || null, (existingForm as any).googleSheetName || null);
+        const sheetId = (existingForm as any).googleSheetId || (existingForm as any).google_sheet_id || null;
+        const sheetName = (existingForm as any).googleSheetName || (existingForm as any).google_sheet_name || null;
+        const accountId = (existingForm as any).connectedAccountId || (existingForm as any).connected_account_id || null;
+
+        setGoogleSheet(sheetId, sheetName, accountId);
         setFormSlug(existingForm.slug || null);
-        setSubmitButtonText((existingForm as any).submitButtonText || null);
+        setSubmitButtonText((existingForm as any).submitButtonText || (existingForm as any).submit_button_text || null);
         setHydrated(true);
       }
     } else {
@@ -178,6 +206,7 @@ export default function Builder() {
           whatsappNumber: currentState.whatsappNumber,
           googleSheetId: currentState.googleSheetId,
           googleSheetName: currentState.googleSheetName,
+          connectedAccountId: currentState.connectedAccountId,
           slug: currentState.formSlug || undefined,
           submitButtonText: currentState.submitButtonText,
         },
@@ -195,6 +224,7 @@ export default function Builder() {
           whatsappNumber: currentState.whatsappNumber,
           googleSheetId: currentState.googleSheetId,
           googleSheetName: currentState.googleSheetName,
+          connectedAccountId: currentState.connectedAccountId,
           submitButtonText: currentState.submitButtonText,
         },
         {
@@ -260,8 +290,7 @@ export default function Builder() {
             variant="outline"
             className="hidden sm:flex border-green-200 text-green-700 bg-green-50 hover:bg-green-100 hover:text-green-800"
             onClick={() => {
-              if (googleSheets) {
-                refetchSheets(); // Ensure we have the latest sheets when opening
+              if (isGoogleConnected) {
                 setShowSettingsDialog(true);
               } else {
                 window.location.href = '/api/auth/google';
@@ -274,7 +303,15 @@ export default function Builder() {
                 <path fill="#FFF" d="M37.5,14h-27v4h27V14z M37.5,22h-27v4h27V22z M37.5,30h-27v4h27V30z" />
               </svg>
               <span className="hidden sm:inline">
-                {googleSheetId ? "Sheet Connected" : "Connect Google"}
+                {isLoadingSheets ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : !isGoogleConnected ? (
+                  "Connect Google"
+                ) : !googleSheetId ? (
+                  "Connect Sheet"
+                ) : (
+                  "Sheet Connected"
+                )}
               </span>
             </div>
           </Button>
@@ -414,108 +451,153 @@ export default function Builder() {
       </Dialog>
 
       <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-0">
             <DialogTitle>Form Settings</DialogTitle>
             <DialogDescription>
               Configure your form link, integrations, and submission behaviour.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-6 pt-4">
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="space-y-6">
 
-            {/* Form Link */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">Form Link</Label>
-              <div className="flex flex-col gap-1.5 rounded-xl border border-border/50 bg-muted/20 p-3 w-full">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <span className="text-[11px] text-muted-foreground/60 whitespace-nowrap">{window.location.protocol}//{window.location.host}/share/</span>
-                  <span className="text-[11px] font-mono text-primary/70 bg-primary/5 px-1.5 py-0.5 rounded truncate">
-                    {existingForm?.shareId || '...'}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground/60">/</span>
-                </div>
-                <input
-                  className="w-full bg-white/50 border border-border/50 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all font-medium"
-                  placeholder={slugify(formTitle) || "form-link"}
-                  value={localSlug}
-                  onChange={(e) => setLocalSlug(slugify(e.target.value))}
-                />
-              </div>
-              <p className="text-[10px] text-muted-foreground/60 italic">Changing this updates the shareable URL for your form.</p>
-            </div>
-
-            {/* WhatsApp Number */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">WhatsApp Number</Label>
-              <Input
-                id="whatsapp"
-                placeholder="e.g. 919876543210"
-                value={localWhatsapp}
-                onChange={(e) => setLocalWhatsapp(e.target.value)}
-                className="input-premium h-11 rounded-xl"
-              />
-              <p className="text-[10px] text-muted-foreground/60">Include country code, no "+" or spaces.</p>
-            </div>
-
-            {/* Google Sheet Direct Integration */}
-            <div className="space-y-2">
-              <Label>Google Sheet Data Sink</Label>
-              {isLoadingSheets ? (
-                <div className="flex items-center text-sm text-muted-foreground"><Loader2 className="w-3 h-3 mr-2 animate-spin" /> Loading sheets...</div>
-              ) : googleSheets && Array.isArray(googleSheets) ? (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <select
-                      className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={localGoogleSheetId}
-                      onChange={(e) => {
-                        const selectedId = e.target.value;
-                        const selectedSheet = googleSheets.find((s: any) => s.id === selectedId);
-                        setLocalGoogleSheetId(selectedId);
-                        setLocalGoogleSheetName(selectedSheet ? selectedSheet.name : "");
-                      }}
-                    >
-                      <option value="">Select a Spreadsheet...</option>
-                      {googleSheets.map((sheet: any) => (
-                        <option key={sheet.id} value={sheet.id}>
-                          {sheet.name}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => refetchSheets()}
-                      title="Refresh Sheets"
-                      type="button"
-                    >
-                      <Loader2 className={cn("w-4 h-4", isLoadingSheets && "animate-spin")} />
-                    </Button>
+              {/* Form Link */}
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">Form Link</Label>
+                <div className="flex flex-col gap-1.5 rounded-xl border border-border/50 bg-muted/20 p-3 w-full">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <span className="text-[11px] text-muted-foreground/60 whitespace-nowrap">{window.location.protocol}//{window.location.host}/share/</span>
+                    <span className="text-[11px] font-mono text-primary/70 bg-primary/5 px-1.5 py-0.5 rounded truncate">
+                      {existingForm?.shareId || '...'}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground/60">/</span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground pr-4">Submissions will be automatically added as new rows in this spreadsheet.</p>
+                  <input
+                    className="w-full bg-white/50 border border-border/50 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all font-medium"
+                    placeholder={slugify(formTitle) || "form-link"}
+                    value={localSlug}
+                    onChange={(e) => setLocalSlug(slugify(e.target.value))}
+                  />
                 </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <p className="text-sm text-muted-foreground">Google account not connected or authorization expired.</p>
-                  <Button variant="outline" size="sm" onClick={() => window.location.href = '/api/auth/google'}>
-                    Connect Google Account
-                  </Button>
+                <p className="text-[10px] text-muted-foreground/60 italic">Changing this updates the shareable URL for your form.</p>
+              </div>
+
+              {/* WhatsApp Number */}
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">WhatsApp Number</Label>
+                <Input
+                  id="whatsapp"
+                  placeholder="e.g. 919876543210"
+                  value={localWhatsapp}
+                  onChange={(e) => setLocalWhatsapp(e.target.value)}
+                  className="input-premium h-11 rounded-xl"
+                />
+                <p className="text-[10px] text-muted-foreground/60">Include country code, no "+" or spaces.</p>
+              </div>
+
+              {/* Google Sheet Direct Integration */}
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">Google Sheets Integration</Label>
+
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] text-muted-foreground uppercase tracking-tight">Select Account</Label>
+                    <Select
+                      value={localAccountId ? localAccountId.toString() : "none"}
+                      onValueChange={(val) => setLocalAccountId(val === "none" ? null : parseInt(val))}
+                    >
+                      <SelectTrigger className="input-premium h-11 rounded-xl">
+                        <SelectValue placeholder="Choose Google Account" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts?.map((account) => (
+                          <SelectItem key={account.id} value={account.id.toString()}>
+                            <div className="flex items-center gap-2">
+                              <User className="w-3 h-3" />
+                              <span>{account.email}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                        <Button
+                          variant="ghost"
+                          className="w-full justify-start px-2 py-1.5 h-auto text-xs font-normal"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            window.location.href = '/api/auth/google';
+                          }}
+                        >
+                          + Link another account
+                        </Button>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {localAccountId && (
+                    <div className="space-y-2">
+                      <Label className="text-[10px] text-muted-foreground uppercase tracking-tight">Select Spreadsheet</Label>
+                      <div className="flex gap-2">
+                        <Select
+                          value={localGoogleSheetId}
+                          onValueChange={(id) => {
+                            setLocalGoogleSheetId(id);
+                            const sheet = (googleSheets as any[])?.find(s => s.id === id);
+                            if (sheet) setLocalGoogleSheetName(sheet.name);
+                          }}
+                        >
+                          <SelectTrigger className="input-premium h-11 rounded-xl flex-1">
+                            <SelectValue placeholder={isLoadingSheets ? "Loading spreadsheets..." : "Choose Spreadsheet"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(googleSheets as any[])?.map((sheet: any) => (
+                              <SelectItem key={sheet.id} value={sheet.id}>
+                                {sheet.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-11 w-11 rounded-xl shrink-0"
+                          onClick={() => refetchSheets()}
+                          disabled={isLoadingSheets}
+                          title="Refresh Sheets"
+                          type="button"
+                        >
+                          <Loader2 className={cn("w-4 h-4", isLoadingSheets && "animate-spin")} />
+                        </Button>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground pr-4">Submissions will be automatically added as new rows in this spreadsheet.</p>
+                    </div>
+                  )}
+
+                  {!isGoogleConnected && (
+                    <div className="flex flex-col gap-2 p-4 rounded-xl border border-dashed bg-muted/30">
+                      <p className="text-xs text-muted-foreground text-center">Connect a Google account to sync responses with Google Sheets.</p>
+                      <Button variant="outline" size="sm" className="rounded-lg h-9" onClick={() => window.location.href = '/api/auth/google'}>
+                        Connect Google Account
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
 
-            {/* Submit Button Text */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">Submit Button Text</Label>
-              <Input
-                placeholder="Submit"
-                value={localSubmitText}
-                onChange={(e) => setLocalSubmitText(e.target.value)}
-                className="input-premium h-11 rounded-xl"
-              />
-              <p className="text-[10px] text-muted-foreground/60">Customise the label on the submit button.</p>
-            </div>
+              {/* Submit Button Text */}
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">Submit Button Text</Label>
+                <Input
+                  placeholder="Submit"
+                  value={localSubmitText}
+                  onChange={(e) => setLocalSubmitText(e.target.value)}
+                  className="input-premium h-11 rounded-xl"
+                />
+                <p className="text-[10px] text-muted-foreground/60">Customise the label on the submit button.</p>
+              </div>
 
+            </div>
+          </div>
+
+          <div className="p-6 pt-0 border-t bg-white sticky bottom-0">
             <div className="flex gap-4 pt-4">
               <Button
                 variant="ghost"
@@ -535,7 +617,7 @@ export default function Builder() {
                 disabled={createForm.isPending || updateForm.isPending}
                 onClick={async () => {
                   setWhatsappNumber(localWhatsapp || null);
-                  setGoogleSheet(localGoogleSheetId || null, localGoogleSheetName || null);
+                  setGoogleSheet(localGoogleSheetId || null, localGoogleSheetName || null, localAccountId);
                   setFormSlug(localSlug || null);
                   setSubmitButtonText(localSubmitText || null);
 

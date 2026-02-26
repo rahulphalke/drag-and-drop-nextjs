@@ -10,6 +10,7 @@ interface FormBuilderState {
   whatsappNumber: string | null;
   googleSheetId: string | null;
   googleSheetName: string | null;
+  connectedAccountId: number | null;
   submitButtonText: string | null;
 
   // Actions
@@ -17,7 +18,7 @@ interface FormBuilderState {
   setTitle: (title: string) => void;
   setFormSlug: (slug: string | null) => void;
   setWhatsappNumber: (num: string | null) => void;
-  setGoogleSheet: (id: string | null, name: string | null) => void;
+  setGoogleSheet: (id: string | null, name: string | null, accountId: number | null) => void;
   setSubmitButtonText: (text: string | null) => void;
   addField: (type: FieldType) => void;
   removeField: (id: string) => void;
@@ -35,6 +36,7 @@ export const useFormBuilderStore = create<FormBuilderState>((set) => ({
   whatsappNumber: null,
   googleSheetId: null,
   googleSheetName: null,
+  connectedAccountId: null,
   submitButtonText: null,
 
   setFields: (fields) => set({ fields }),
@@ -42,7 +44,7 @@ export const useFormBuilderStore = create<FormBuilderState>((set) => ({
   setTitle: (title) => set({ formTitle: title }),
   setFormSlug: (formSlug) => set({ formSlug }),
   setWhatsappNumber: (whatsappNumber) => set({ whatsappNumber }),
-  setGoogleSheet: (googleSheetId, googleSheetName) => set({ googleSheetId, googleSheetName }),
+  setGoogleSheet: (googleSheetId, googleSheetName, connectedAccountId) => set({ googleSheetId, googleSheetName, connectedAccountId }),
   setSubmitButtonText: (submitButtonText) => set({ submitButtonText }),
 
   addField: (type) => set((state) => {
@@ -109,6 +111,7 @@ export const useFormBuilderStore = create<FormBuilderState>((set) => ({
     whatsappNumber: null,
     googleSheetId: null,
     googleSheetName: null,
+    connectedAccountId: null,
     submitButtonText: null,
   }),
 }));

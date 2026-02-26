@@ -122,6 +122,41 @@ export function useUpdateForm() {
   });
 }
 
+export function useDeleteForm() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const url = buildUrl(api.forms.delete.path, { id });
+      const res = await fetch(url, {
+        method: api.forms.delete.method,
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        if (res.status === 404) throw new Error("Form not found");
+        throw new Error("Failed to delete form");
+      }
+      return api.forms.delete.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.forms.list.path] });
+      toast({
+        title: "Deleted",
+        description: "Form deleted successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
 export function useSubmissions(formId: number) {
   return useQuery({
     queryKey: [api.submissions.list.path, formId],

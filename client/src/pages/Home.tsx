@@ -3,9 +3,20 @@ import { useUser, useLogout } from "@/hooks/useAuth";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Plus, Loader2, FileText, CalendarDays, Inbox, Copy, Check, QrCode } from "lucide-react";
+import { Plus, Loader2, FileText, CalendarDays, Inbox, Copy, Check, QrCode, MoreVertical, Trash2, Share2 } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
+import { useDeleteForm } from "@/hooks/use-forms";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Table,
   TableBody,
@@ -14,6 +25,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -34,7 +51,9 @@ export default function Home() {
   const { data: forms, isLoading, error } = useForms();
   const [viewSubmissionsId, setViewSubmissionsId] = useState<number | null>(null);
   const [qrCodeFormId, setQrCodeFormId] = useState<number | null>(null);
+  const [deleteFormId, setDeleteFormId] = useState<number | null>(null);
   const { toast } = useToast();
+  const deleteForm = useDeleteForm();
 
   const handleCopyLink = (shareId: string, slug: string) => {
     const url = `${window.location.protocol}//${window.location.host}/share/${shareId}/${slug}`;
@@ -102,48 +121,56 @@ export default function Home() {
                       </span>
                     </div>
 
-                    <TooltipProvider>
-                      <div className="flex gap-1">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleCopyLink(form.shareId, form.slug);
-                              }}
-                            >
-                              <Copy className="w-4 h-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Copy Share Link</p>
-                          </TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setQrCodeFormId(form.id);
-                              }}
-                            >
-                              <QrCode className="w-4 h-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Show QR Code</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </TooltipProvider>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          className="cursor-pointer"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleCopyLink(form.shareId, form.slug);
+                          }}
+                        >
+                          <Share2 className="w-4 h-4 mr-2" />
+                          Share
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="cursor-pointer"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setQrCodeFormId(form.id);
+                          }}
+                        >
+                          <QrCode className="w-4 h-4 mr-2" />
+                          QR Code
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive focus:bg-destructive cursor-pointer"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDeleteFormId(form.id);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   <CardTitle className="font-display text-xl">{form.title}</CardTitle>
                   <CardDescription className="flex items-center gap-1 mt-1">
@@ -191,6 +218,37 @@ export default function Home() {
           />
         );
       })()}
+
+      <AlertDialog open={deleteFormId !== null} onOpenChange={(open) => !open && setDeleteFormId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete your form
+              and all of its submissions.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={deleteForm.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (deleteFormId) {
+                  deleteForm.mutate(deleteFormId, {
+                    onSuccess: () => setDeleteFormId(null),
+                  });
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteForm.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -6,6 +6,7 @@ export interface AuthUser {
     email: string;
     name: string;
     avatar?: string | null;
+    googleAccessToken?: string | null;
 }
 
 export function useUser() {

@@ -13,15 +13,15 @@ async function inspect() {
     const colRes = await client.query(`
       SELECT column_name, data_type 
       FROM information_schema.columns 
-      WHERE table_name = 'forms'
+      WHERE table_name = 'users'
     `);
-    console.log("--- COLUMNS ---");
+    console.log("--- USERS COLUMNS ---");
     console.log(JSON.stringify(colRes.rows, null, 2));
 
-    // Check form 12
-    const formRes = await client.query("SELECT * FROM forms WHERE id = 12 OR id = 2");
-    console.log("--- DATA (Forms 2 & 12) ---");
-    console.log(JSON.stringify(formRes.rows, null, 2));
+    // Check users
+    const userRes = await client.query("SELECT * FROM users LIMIT 1");
+    console.log("--- DATA (User) ---");
+    console.log(JSON.stringify(userRes.rows, null, 2));
   } catch (err) {
     console.error(err);
   } finally {

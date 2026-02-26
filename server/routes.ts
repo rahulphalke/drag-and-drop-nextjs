@@ -94,10 +94,10 @@ export async function registerRoutes(
       "profile",
       "email",
       "https://www.googleapis.com/auth/spreadsheets",
-      "https://www.googleapis.com/auth/drive.readonly"
+      "https://www.googleapis.com/auth/drive.metadata.readonly"
     ],
-    accessType: "offline", // Required to get a refresh token
-    prompt: "consent",     // Force consent screen to ensure refresh token is provided
+    accessType: "offline",
+    prompt: "consent",
   }));
 
   // GET /api/auth/google/callback
@@ -106,6 +106,73 @@ export async function registerRoutes(
     passport.authenticate("google", { failureRedirect: "/login?error=google" }),
     (_req, res) => res.redirect("/")
   );
+
+  // PATCH /api/auth/password
+  app.patch("/api/auth/password", requireAuth, async (req, res) => {
+    try {
+      const { currentPassword, newPassword } = z
+        .object({
+          currentPassword: z.string(),
+          newPassword: z.string().min(6),
+        })
+        .parse(req.body);
+
+      const [user] = await db.select().from(users).where(eq(users.id, req.user!.id));
+      if (!user || !user.password) {
+        return res.status(400).json({ message: "Current password verification failed or account type mismatch." });
+      }
+
+      const isValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isValid) {
+        return res.status(401).json({ message: "Incorrect current password" });
+      }
+
+      const hashed = await bcrypt.hash(newPassword, 12);
+      await db.update(users).set({ password: hashed }).where(eq(users.id, req.user!.id));
+
+      res.json({ message: "Password updated successfully" });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // GET /api/accounts
+  app.get("/api/accounts", requireAuth, async (req, res) => {
+    try {
+      const storage = await getStorage();
+      const accounts = await storage.getConnectedAccounts(req.user!.id);
+      res.json(accounts.map(a => ({
+        id: a.id,
+        provider: a.provider,
+        email: a.email,
+        name: a.name,
+        createdAt: a.createdAt
+      })));
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch connected accounts" });
+    }
+  });
+
+  // DELETE /api/accounts/:id
+  app.delete("/api/accounts/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const storage = await getStorage();
+      const account = await storage.getConnectedAccount(id);
+
+      if (!account || account.userId !== req.user!.id) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+
+      await storage.deleteConnectedAccount(id);
+      res.json({ message: "Account disconnected successfully" });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to disconnect account" });
+    }
+  });
 
   // ── Form routes ──────────────────────────────────────────────────────────────
 
@@ -178,6 +245,23 @@ export async function registerRoutes(
     }
   });
 
+  // DELETE /api/forms/:id
+  app.delete(api.forms.delete.path, requireAuth, async (req, res) => {
+    const id = Number(req.params.id);
+    const form = await storage.getForm(id);
+
+    if (!form) {
+      return res.status(404).json({ message: "Form not found" });
+    }
+
+    if (form.userId !== req.user!.id) {
+      return res.status(403).json({ message: "You don't have permission to delete this form" });
+    }
+
+    await storage.deleteForm(id);
+    res.json({ message: "Form deleted successfully" });
+  });
+
   // POST /api/forms/save
   app.post('/api/forms/save', requireAuth, async (req, res) => {
     try {
@@ -226,73 +310,90 @@ export async function registerRoutes(
       // Handle Google Sheets integration if configured
       if (form.googleSheetId) {
         try {
-          const formOwner = await db.select().from(users).where(eq(users.id, form.userId)).then(res => res[0]);
+          const storage = await getStorage();
+          let tokens;
+          let accountToUpdateId: number | null = null;
 
-          if (formOwner && formOwner.googleAccessToken) {
-            const oauth2Client = new google.auth.OAuth2(
-              process.env.GOOGLE_CLIENT_ID,
-              process.env.GOOGLE_CLIENT_SECRET
-            );
-
-            oauth2Client.setCredentials({
-              access_token: formOwner.googleAccessToken,
-              refresh_token: formOwner.googleRefreshToken,
-            });
-
-            // Handle token refresh events by saving new tokens to the DB
-            oauth2Client.on('tokens', async (tokens) => {
-              if (tokens.access_token) {
-                const updates: any = { googleAccessToken: tokens.access_token };
-                if (tokens.refresh_token) {
-                  updates.googleRefreshToken = tokens.refresh_token;
-                }
-                await db.update(users).set(updates).where(eq(users.id, formOwner!.id));
-                console.log(`[Google Sheets] Updated tokens for user ${formOwner!.id}`);
-              }
-            });
-
-            const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
-
-            // 3. Prepare human-readable data (Removed Submission ID, Submitted At moved to end)
-            const headers = [...form.fields.map(f => f.label || f.id), 'Submitted At'];
-
-            const rowData = [
-              ...form.fields.map(f => {
-                const val = (req.body as any)[f.id];
-                return Array.isArray(val) ? val.join(', ') : (val?.toString() || '');
-              }),
-              new Date(submission.createdAt!).toLocaleString()
-            ];
-
-            console.log(`[Google Sheets] Appending to sheet ${form.googleSheetId}`);
-
-            // 4. Check if sheet is empty to see if we need to write headers
-            try {
-              const getRes = await sheets.spreadsheets.values.get({
-                spreadsheetId: form.googleSheetId as string,
-                range: 'A1:Z1', // Just check the first row
-              });
-
-              const hasHeaders = getRes.data.values && getRes.data.values.length > 0;
-              const valuesToAppend = hasHeaders ? [rowData] : [headers, rowData];
-
-              // 5. Append the data. We use a wide range "A:Z" to just append to the bottom of whatever data exists.
-              await sheets.spreadsheets.values.append({
-                spreadsheetId: form.googleSheetId as string,
-                range: 'A:Z',
-                valueInputOption: 'USER_ENTERED',
-                insertDataOption: 'INSERT_ROWS',
-                requestBody: {
-                  values: valuesToAppend,
-                },
-              });
-
-              console.log(`[Google Sheets] Success for submission ${submission.id}`);
-            } catch (err: any) {
-              console.error(`[Google Sheets] Error appending to sheet:`, err.message);
+          if (form.connectedAccountId) {
+            const account = await storage.getConnectedAccount(form.connectedAccountId);
+            if (account) {
+              tokens = {
+                accessToken: account.accessToken,
+                refreshToken: account.refreshToken
+              };
+              accountToUpdateId = account.id;
             }
-          } else {
-            console.error(`[Google Sheets] Form owner ${form.userId} has no Google access token.`);
+          }
+
+          if (form.connectedAccountId) {
+            const account = await storage.getConnectedAccount(form.connectedAccountId);
+            if (account) {
+              const oauth2Client = new google.auth.OAuth2(
+                process.env.GOOGLE_CLIENT_ID,
+                process.env.GOOGLE_CLIENT_SECRET
+              );
+
+              oauth2Client.setCredentials({
+                access_token: account.accessToken,
+                refresh_token: account.refreshToken || undefined,
+              });
+
+              // Handle token refresh events
+              oauth2Client.on('tokens', async (newTokens) => {
+                if (newTokens.access_token) {
+                  await storage.updateConnectedAccount(account.id, {
+                    accessToken: newTokens.access_token,
+                    refreshToken: newTokens.refresh_token || undefined
+                  });
+                  console.log(`[Google Sheets] Updated tokens for account ${account.id}`);
+                }
+              });
+
+              const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+
+              // 3. Prepare human-readable data
+              const headers = [...form.fields.map(f => f.label || f.id), 'Submitted At'];
+
+              const rowData = [
+                ...form.fields.map(f => {
+                  const val = (req.body as any)[f.id];
+                  return Array.isArray(val) ? val.join(', ') : (val?.toString() || '');
+                }),
+                new Date(submission.createdAt!).toLocaleString()
+              ];
+
+              console.log(`[Google Sheets] Appending to sheet ${form.googleSheetId}`);
+
+              // 4. Check if sheet is empty to see if we need to write headers
+              try {
+                const getRes = await sheets.spreadsheets.values.get({
+                  spreadsheetId: form.googleSheetId as string,
+                  range: 'A1:Z1', // Just check the first row
+                });
+
+                const hasHeaders = getRes.data.values && getRes.data.values.length > 0;
+                const valuesToAppend = hasHeaders ? [rowData] : [headers, rowData];
+
+                // 5. Append the data
+                await sheets.spreadsheets.values.append({
+                  spreadsheetId: form.googleSheetId as string,
+                  range: 'A:Z',
+                  valueInputOption: 'USER_ENTERED',
+                  insertDataOption: 'INSERT_ROWS',
+                  requestBody: {
+                    values: valuesToAppend,
+                  },
+                });
+
+                console.log(`[Google Sheets] Success for submission ${submission.id}`);
+              } catch (err: any) {
+                console.error(`[Google Sheets] Error appending to sheet:`, err.message);
+              }
+            } else {
+              console.error(`[Google Sheets] Connected account ${form.connectedAccountId} not found.`);
+            }
+          } else if (form.googleSheetId) {
+            console.error(`[Google Sheets] Form has sheet ID but no connected account ID.`);
           }
         } catch (err) {
           console.error("[Google Sheets] Complete error processing submission:", err);
@@ -328,25 +429,48 @@ export async function registerRoutes(
 
   // GET /api/integrations/google/sheets
   // Fetches a list of the user's spreadsheets to show in the UI dropdown
-  app.get('/api/integrations/google/sheets', requireAuth, async (req, res) => {
+  app.get("/api/integrations/google/sheets", requireAuth, async (req, res) => {
     try {
-      const user = await db.select().from(users).where(eq(users.id, req.user!.id)).then(res => res[0]);
+      const accountId = req.query.accountId ? parseInt(req.query.accountId as string) : null;
+      const storage = await getStorage();
 
-      if (!user || !user.googleAccessToken) {
-        return res.status(403).json({ message: "Google account not connected or missing permissions." });
+      let tokens;
+      if (accountId) {
+        const account = await storage.getConnectedAccount(accountId);
+        if (!account || account.userId !== req.user!.id) {
+          return res.status(404).json({ message: "Connected account not found" });
+        }
+        tokens = {
+          accessToken: account.accessToken,
+          refreshToken: account.refreshToken
+        };
+      } else {
+        return res.status(400).json({ message: "No account selected" });
       }
 
-      const oauth2Client = new google.auth.OAuth2(
+      const auth = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET
       );
 
-      oauth2Client.setCredentials({
-        access_token: user.googleAccessToken,
-        refresh_token: user.googleRefreshToken,
+      auth.setCredentials({
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken || undefined
       });
 
-      const drive = google.drive({ version: 'v3', auth: oauth2Client });
+      // Handle token refreshes during listing
+      auth.on('tokens', async (newTokens) => {
+        if (newTokens.access_token) {
+          await storage.updateConnectedAccount(accountId!, {
+            accessToken: newTokens.access_token,
+            refreshToken: newTokens.refresh_token || undefined
+          });
+          console.log(`[Google Sheets] Updated tokens for account ${accountId} during fetch`);
+        }
+      });
+
+      console.log(`[Google Sheets] Starting fetch for account ${accountId}...`);
+      const drive = google.drive({ version: 'v3', auth: auth });
 
       // Query Google Drive for files of type spreadsheet
       const response = await drive.files.list({
@@ -355,6 +479,8 @@ export async function registerRoutes(
         orderBy: 'modifiedTime desc',
         pageSize: 50, // Let's limit to recent 50 for performance
       });
+
+      console.log(`[Google Sheets] Successfully fetched ${response.data.files?.length || 0} sheets for account ${accountId}`);
 
       res.json(response.data.files || []);
     } catch (err: any) {

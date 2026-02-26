@@ -9,6 +9,7 @@ import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
+import { getStorage } from "./storage";
 
 declare global {
     namespace Express {
@@ -27,11 +28,12 @@ const PgSession = connectPgSimple(session);
 
 passport.use(
     new LocalStrategy({ usernameField: "email" }, async (email, password, done) => {
+        const storage = await getStorage();
         try {
-            const [user] = await db.select().from(users).where(eq(users.email, email));
-            if (!user) return done(null, false, { message: "No account found with that email." });
-            if (!user.password) return done(null, false, { message: "This account uses Google sign-in." });
-            const valid = await bcrypt.compare(password, user.password);
+            const user = await storage.getUserByEmail(email);
+            if (!user) return done(null, false, { message: "Incorrect email." });
+            if (user.googleId && !user.password) return done(null, false, { message: "This account uses Google sign-in." });
+            const valid = await bcrypt.compare(password, user.password!);
             if (!valid) return done(null, false, { message: "Incorrect password." });
             return done(null, { id: user.id, email: user.email, name: user.name, avatar: user.avatar });
         } catch (err) {
@@ -56,64 +58,83 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
                     const email = profile.emails?.[0]?.value;
                     if (!email) return done(new Error("No email returned from Google"));
 
+                    const storage = await getStorage();
+
                     // If user is already logged in, link the Google tokens to their CURRENT account
                     if (req.user) {
-                        const [updated] = await db.update(users)
-                            .set({
-                                googleAccessToken: accessToken,
-                                ...(refreshToken ? { googleRefreshToken: refreshToken } : {})
-                            })
-                            .where(eq(users.id, req.user.id))
-                            .returning();
+                        const existingAccount = await storage.getConnectedAccountByProviderId('google', profile.id);
+                        if (existingAccount) {
+                            if (existingAccount.userId !== req.user.id) {
+                                return done(null, false, { message: "This Google account is already linked to another user." });
+                            }
+                            await storage.updateConnectedAccount(existingAccount.id, {
+                                accessToken,
+                                refreshToken: refreshToken || existingAccount.refreshToken,
+                            });
+                        } else {
+                            await storage.createConnectedAccount({
+                                userId: req.user.id,
+                                provider: 'google',
+                                providerId: profile.id,
+                                email,
+                                name: profile.displayName || email.split("@")[0],
+                                accessToken,
+                                refreshToken: refreshToken || null,
+                            });
+                        }
                         console.log(`[Auth] Linked Google account ${email} to user ${req.user.id}`);
-                        return done(null, { id: updated.id, email: updated.email, name: updated.name, avatar: updated.avatar });
+                        // Keep current user session
+                        return done(null, req.user);
                     }
 
                     // Otherwise, proceed with normal login/signup flow
-                    // Check if user already exists by googleId
-                    const [existing] = await db.select().from(users).where(eq(users.googleId, profile.id));
-                    if (existing) {
-                        // Update tokens on each login just in case
-                        const [updated] = await db.update(users)
-                            .set({
-                                googleAccessToken: accessToken,
-                                ...(refreshToken ? { googleRefreshToken: refreshToken } : {})
-                            })
-                            .where(eq(users.id, existing.id))
-                            .returning();
-                        return done(null, { id: updated.id, email: updated.email, name: updated.name, avatar: updated.avatar });
+                    const linkedin = await storage.getConnectedAccountByProviderId('google', profile.id);
+                    if (linkedin) {
+                        const user = await storage.getUser(linkedin.userId);
+                        if (user) {
+                            await storage.updateConnectedAccount(linkedin.id, {
+                                accessToken,
+                                refreshToken: refreshToken || linkedin.refreshToken,
+                            });
+                            return done(null, user);
+                        }
                     }
 
-                    // Check if email already exists (link accounts)
-                    const [byEmail] = await db.select().from(users).where(eq(users.email, email));
+                    // Check if email already exists
+                    const byEmail = await storage.getUserByEmail(email);
                     if (byEmail) {
-                        const [updated] = await db
-                            .update(users)
-                            .set({
-                                googleId: profile.id,
-                                avatar: profile.photos?.[0]?.value ?? byEmail.avatar,
-                                googleAccessToken: accessToken,
-                                ...(refreshToken ? { googleRefreshToken: refreshToken } : {})
-                            })
-                            .where(eq(users.id, byEmail.id))
-                            .returning();
-                        return done(null, { id: updated.id, email: updated.email, name: updated.name, avatar: updated.avatar });
-                    }
-
-                    // Create new user
-                    const [created] = await db
-                        .insert(users)
-                        .values({
+                        await storage.createConnectedAccount({
+                            userId: byEmail.id,
+                            provider: 'google',
+                            providerId: profile.id,
                             email,
                             name: profile.displayName || email.split("@")[0],
-                            googleId: profile.id,
-                            avatar: profile.photos?.[0]?.value,
-                            password: null,
-                            googleAccessToken: accessToken,
-                            googleRefreshToken: refreshToken || null,
-                        })
-                        .returning();
-                    return done(null, { id: created.id, email: created.email, name: created.name, avatar: created.avatar });
+                            accessToken,
+                            refreshToken: refreshToken || null,
+                        });
+                        return done(null, byEmail);
+                    }
+
+                    // Create new user and connected_account
+                    const created = await storage.createUser({
+                        email,
+                        name: profile.displayName || email.split("@")[0],
+                        googleId: profile.id,
+                        avatar: profile.photos?.[0]?.value || null,
+                        password: null
+                    });
+
+                    await storage.createConnectedAccount({
+                        userId: created.id,
+                        provider: 'google',
+                        providerId: profile.id,
+                        email,
+                        name: profile.displayName || email.split("@")[0],
+                        accessToken,
+                        refreshToken: refreshToken || null,
+                    });
+
+                    return done(null, created);
                 } catch (err) {
                     return done(err as Error);
                 }
@@ -125,8 +146,9 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 passport.serializeUser((user, done) => done(null, user.id));
 
 passport.deserializeUser(async (id: number, done) => {
+    const storage = await getStorage();
     try {
-        const [user] = await db.select().from(users).where(eq(users.id, id));
+        const user = await storage.getUser(id);
         if (!user) return done(null, false);
         done(null, { id: user.id, email: user.email, name: user.name, avatar: user.avatar });
     } catch (err) {

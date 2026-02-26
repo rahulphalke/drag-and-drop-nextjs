@@ -1,5 +1,5 @@
 
-import { pgTable, text, serial, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, jsonb, timestamp, foreignKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -12,8 +12,18 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   googleId: text("google_id").unique(),
   avatar: text("avatar"),
-  googleRefreshToken: text("google_refresh_token"), // For Sheets API offline access
-  googleAccessToken: text("google_access_token"),   // Cached access token
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const connectedAccounts = pgTable("connected_accounts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  provider: text("provider").notNull().default('google'),
+  providerId: text("provider_id").notNull(),
+  email: text("email").notNull(),
+  name: text("name").notNull(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -49,8 +59,9 @@ export const forms = pgTable("forms", {
   slug: text("slug").notNull(),
   fields: jsonb("fields").notNull().$type<FormField[]>(),
   whatsappNumber: text("whatsapp_number"),
-  googleSheetId: text("google_sheet_id"),     // Direct sheet ID
+  googleSheetId: text("google_sheet_id"),      // ID from Google Google Drive
   googleSheetName: text("google_sheet_name"),   // Display name for UI
+  connectedAccountId: integer("connected_account_id"), // Linked account for integration
   submitButtonText: text("submit_button_text"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -72,6 +83,7 @@ export const insertFormSchema = createInsertSchema(forms)
     whatsappNumber: z.string().optional().nullable(),
     googleSheetId: z.string().optional().nullable(),
     googleSheetName: z.string().optional().nullable(),
+    connectedAccountId: z.number().optional().nullable(),
     submitButtonText: z.string().optional().nullable(),
   });
 
@@ -92,3 +104,7 @@ export const insertSubmissionSchema = createInsertSchema(submissions)
 
 export type Submission = typeof submissions.$inferSelect;
 export type InsertSubmission = z.infer<typeof insertSubmissionSchema>;
+
+export type ConnectedAccount = typeof connectedAccounts.$inferSelect;
+export const insertConnectedAccountSchema = createInsertSchema(connectedAccounts).omit({ id: true, createdAt: true });
+export type InsertConnectedAccount = z.infer<typeof insertConnectedAccountSchema>;

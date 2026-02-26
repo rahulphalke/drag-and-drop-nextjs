@@ -180,6 +180,11 @@ export default function Login() {
                     </button>
                 </form>
 
+                <p className="login-privacy">
+                    By clicking Login, you agree to our<br />
+                    <a href="#" className="login-privacy-link">Privacy Policy</a> and <a href="#" className="login-privacy-link">Terms and Conditions</a>
+                </p>
+
                 <p className="login-footer">
                     {tab === "login" ? "Don't have an account? " : "Already have an account? "}
                     <button

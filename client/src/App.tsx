@@ -9,6 +9,8 @@ import Builder from "@/pages/Builder";
 import Preview from "@/pages/Preview";
 import ShareForm from "@/pages/ShareForm";
 import Login from "@/pages/Login";
+import Profile from "@/pages/Profile";
+import Landing from "@/pages/Landing";
 import { useUser } from "@/hooks/useAuth";
 import { Header } from "@/components/Header";
 
@@ -38,7 +40,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
-      <Route path="/">
+      <Route path="/" component={Landing} />
+      <Route path="/dashboard">
         <AuthGuard>
           <Home />
         </AuthGuard>
@@ -46,6 +49,11 @@ function Router() {
       <Route path="/builder">
         <AuthGuard>
           <Builder />
+        </AuthGuard>
+      </Route>
+      <Route path="/profile">
+        <AuthGuard>
+          <Profile />
         </AuthGuard>
       </Route>
       <Route path="/builder/:id">
